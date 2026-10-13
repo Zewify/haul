@@ -68,9 +68,9 @@ test('dash representation sets embedded in a page become joinable video + audio 
   ].join(',') + '],"other":1</script>';
   const items = findDashSets(html, '222');
   assert.deepEqual(items.map((i) => ({ ...i, url: i.url.slice(0, 40), audioUrl: i.audioUrl.slice(0, 40) })), [
-    { kind: 'dash', videoId: '222', url: 'https://video.xx.fbcdn.net/v/b1.mp4?efg=', audioUrl: 'https://video.xx.fbcdn.net/v/b2.mp4?efg=', label: 'This video · 480p H.264 · video + audio', duration: 90, width: 854, height: 480, codec: 'H.264' },
-    { kind: 'dash', videoId: '111', url: 'https://video.xx.fbcdn.net/v/a2.mp4?efg=', audioUrl: 'https://video.xx.fbcdn.net/v/a5.mp4?efg=', label: 'Another video on this page · 720p H.264 · video + audio', duration: 90, width: 720, height: 720, codec: 'H.264' },
-    { kind: 'dash', videoId: '111', url: 'https://video.xx.fbcdn.net/v/a1.mp4?efg=', audioUrl: 'https://video.xx.fbcdn.net/v/a5.mp4?efg=', label: 'Another video on this page · 1080p AV1 · video + audio · plays on newer Macs only', duration: 90, width: 1080, height: 1080, codec: 'AV1' },
+    { kind: 'dash', videoId: '222', url: 'https://video.xx.fbcdn.net/v/b1.mp4?efg=', audioUrl: 'https://video.xx.fbcdn.net/v/b2.mp4?efg=', label: 'This video · 480p H.264 · video + audio', duration: 90, width: 854, height: 480, codec: 'H.264', codecs: 'avc1.64001F' },
+    { kind: 'dash', videoId: '111', url: 'https://video.xx.fbcdn.net/v/a2.mp4?efg=', audioUrl: 'https://video.xx.fbcdn.net/v/a5.mp4?efg=', label: 'Another video on this page · 720p H.264 · video + audio', duration: 90, width: 720, height: 720, codec: 'H.264', codecs: 'avc1.64001F' },
+    { kind: 'dash', videoId: '111', url: 'https://video.xx.fbcdn.net/v/a1.mp4?efg=', audioUrl: 'https://video.xx.fbcdn.net/v/a5.mp4?efg=', label: 'Another video on this page · 1080p AV1 · video + audio · plays on newer Macs only', duration: 90, width: 1080, height: 1080, codec: 'AV1', codecs: 'av01.0.08M.08' },
   ], 'one item per codec family, H.264 first, the loudest audio, the page video first');
   assert.deepEqual(findDashSets('<p>none</p>', '1'), []);
   const vp9Only = '"all_video_dash_prefetch_representations":[' + set('333', [rep('c1', 'video/mp4', 'vp09.00.40.08', 1920, 1920, 900000, '333'), rep('c2', 'audio/mp4', 'mp4a.40.2', 0, 0, 96000, '333')]) + ']';
@@ -112,8 +112,44 @@ test('a DASH manifest becomes joinable items the same way the page table does', 
   </Period></MPD>`;
   const items = parseMPD(xml, '26934216426212982');
   assert.deepEqual(items, [
-    { kind: 'dash', videoId: '26934216426212982', url: 'https://video.xx.fbcdn.net/v/v720.mp4?x=1&y=2', audioUrl: 'https://video.xx.fbcdn.net/v/a128.mp4', label: 'This video · 720p H.264 · video + audio', duration: 900, width: 720, height: 720, codec: 'H.264' },
-    { kind: 'dash', videoId: '26934216426212982', url: 'https://video.xx.fbcdn.net/v/v1080.mp4', audioUrl: 'https://video.xx.fbcdn.net/v/a128.mp4', label: 'This video · 1080p AV1 · video + audio · plays on newer Macs only', duration: 900, width: 1080, height: 1080, codec: 'AV1' },
+    { kind: 'dash', videoId: '26934216426212982', url: 'https://video.xx.fbcdn.net/v/v720.mp4?x=1&y=2', audioUrl: 'https://video.xx.fbcdn.net/v/a128.mp4', label: 'This video · 720p H.264 · video + audio', duration: 900, width: 720, height: 720, codec: 'H.264', codecs: 'avc1.64001F' },
+    { kind: 'dash', videoId: '26934216426212982', url: 'https://video.xx.fbcdn.net/v/v1080.mp4', audioUrl: 'https://video.xx.fbcdn.net/v/a128.mp4', label: 'This video · 1080p AV1 · video + audio · plays on newer Macs only', duration: 900, width: 1080, height: 1080, codec: 'AV1', codecs: 'av01.0.08M.08' },
   ]);
   assert.deepEqual(parseMPD('<html>login</html>', '1'), []);
+});
+
+const { labelDashItems } = require('./media.js');
+
+test('the url names "This video"; what the player is fetching only decides when the url does not', () => {
+  const items = [
+    { kind: 'dash', videoId: '111', url: 'https://v.example/a-video.mp4?efg=1', audioUrl: 'https://v.example/a-audio.mp4?efg=1', height: 1080, codec: 'AV1', own: false },
+    { kind: 'dash', videoId: '222', url: 'https://v.example/b-video.mp4?efg=2', audioUrl: 'https://v.example/b-audio.mp4?efg=2', height: 720, codec: 'H.264', own: false },
+  ];
+  const sniffed = ['https://v.example/b-audio.mp4?efg=2', 'https://v.example/unrelated.mp4'];
+  const labelled = labelDashItems(items, sniffed, null);
+  assert.deepEqual(labelled.map((i) => [i.videoId, i.label]), [
+    ['222', 'This video · 720p H.264 · video + audio'],
+    ['111', 'Another video on this page · 1080p AV1 · video + audio · plays on newer Macs only'],
+  ], 'without a url id, the sniffed match wins and comes first');
+  const byUrl = labelDashItems(items, sniffed, '111');
+  assert.equal(byUrl[0].videoId, '111', 'the url id wins over what is playing');
+  assert.match(byUrl[0].label, /^This video/);
+  assert.match(byUrl[1].label, /^Another video/);
+  const none = labelDashItems(items, [], null);
+  assert.ok(none.every((i) => /^Another video/.test(i.label) === false && /^Video on this page/.test(i.label)), 'with nothing to go on, nothing is called "another"');
+});
+
+test('dash rows say which video they are instead of a hash', () => {
+  assert.deepEqual(describeMedia({ url: 'https://scontent.xx.fbcdn.net/v/AQNwtkB9F6JmSviz4edJ.mp4', kind: 'dash', videoId: '26934216426212982', label: 'This video · 1080p AV1 · video + audio', duration: 900 }),
+    { title: 'This video · 1080p AV1 · video + audio · 15:00', subtitle: 'scontent.xx.fbcdn.net · video 26934216426212982' });
+});
+
+const { pageReaderItem } = require('./media.js');
+
+test('a Facebook video page gets an item that hands the page itself to Haul', () => {
+  assert.deepEqual(pageReaderItem('https://www.facebook.com/reel/1619008336628300'),
+    { kind: 'page', url: 'https://www.facebook.com/reel/1619008336628300', videoId: '1619008336628300', label: 'This video · 720p H.264 · Haul reads the page' });
+  assert.deepEqual(pageReaderItem('https://www.facebook.com/watch/?v=123'), { kind: 'page', url: 'https://www.facebook.com/watch/?v=123', videoId: '123', label: 'This video · 720p H.264 · Haul reads the page' });
+  assert.equal(pageReaderItem('https://www.facebook.com/'), null);
+  assert.equal(pageReaderItem('https://example.com/reel/1'), null);
 });

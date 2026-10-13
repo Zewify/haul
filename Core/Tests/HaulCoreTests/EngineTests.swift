@@ -243,6 +243,42 @@ struct EngineTests {
         #expect(leftovers.isEmpty, "\(leftovers)")
     }
 
+    @Test func aDashPairWhoseFirstTrackAlreadyHasSoundIsKeptAsIs() async throws {
+        let fixtures = folder.appendingPathComponent("fixtures3", isDirectory: true)
+        try FileManager.default.createDirectory(at: fixtures, withIntermediateDirectories: true)
+        try Fixtures.videoOnly(at: fixtures.appendingPathComponent("v.mp4"))
+        try Fixtures.audioOnly(at: fixtures.appendingPathComponent("a.mp4"))
+        _ = try await Muxer.join(video: fixtures.appendingPathComponent("v.mp4"), audio: fixtures.appendingPathComponent("a.mp4"), into: fixtures.appendingPathComponent("both.mp4"))
+        server["/both.mp4"] = .init(data: try Data(contentsOf: fixtures.appendingPathComponent("both.mp4")), contentType: "video/mp4")
+        server["/a.mp4"] = .init(data: try Data(contentsOf: fixtures.appendingPathComponent("a.mp4")), contentType: "audio/mp4")
+        let engine = engine()
+        var request = request("/both.mp4", name: "Already.mp4")
+        request.kind = .dash
+        request.audioURL = server.url("/a.mp4")
+        let id = engine.add(request)
+        #expect(await eventually { engine.download(id)?.state == .finished || { if case .failed = engine.download(id)?.state { true } else { false } }() })
+        let done = try #require(engine.download(id))
+        #expect(done.state == .finished, "\(done.state)")
+        let info = try #require(await MediaInfo.inspect(URL(fileURLWithPath: done.finalPath ?? "/nowhere")))
+        #expect(info.hasVideo && info.hasAudio)
+        #expect(server.requests.filter { $0.path == "/a.mp4" }.isEmpty, "the audio track is not fetched when the first already has sound")
+    }
+
+    @Test func aDashPairWithNoSoundAnywhereFailsClearly() async throws {
+        let fixtures = folder.appendingPathComponent("fixtures4", isDirectory: true)
+        try FileManager.default.createDirectory(at: fixtures, withIntermediateDirectories: true)
+        try Fixtures.videoOnly(at: fixtures.appendingPathComponent("v.mp4"))
+        server["/v.mp4"] = .init(data: try Data(contentsOf: fixtures.appendingPathComponent("v.mp4")), contentType: "video/mp4")
+        let engine = engine()
+        var request = request("/v.mp4", name: "Nothing.mp4")
+        request.kind = .dash
+        request.audioURL = server.url("/v.mp4")
+        let id = engine.add(request)
+        #expect(await eventually { if case .failed = engine.download(id)?.state { true } else { false } })
+        guard case .failed(let message) = engine.download(id)?.state else { return }
+        #expect(message.contains("no sound"))
+    }
+
     @Test func aFinishedMediaFileWithoutSoundIsNoted() async throws {
         let fixtures = folder.appendingPathComponent("fixtures2", isDirectory: true)
         try FileManager.default.createDirectory(at: fixtures, withIntermediateDirectories: true)

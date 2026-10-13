@@ -59,4 +59,11 @@ struct MediaNameTests {
         #expect(Filename.mediaName(pageTitle: "  ", url: URL(string: "https://c.com/v/clip")!, contentType: "video/webm") == "clip.webm")
         #expect(Filename.mediaName(pageTitle: "A Clip", url: URL(string: "https://c.com/v/master.m3u8")!, contentType: nil) == "A Clip")
     }
+
+    @Test func aBareSiteTitleGetsTheVideoId() {
+        let hash = URL(string: "https://scontent.xx.fbcdn.net/v/AQNwtkB9F6JmSviz4edJ.mp4?efg=1")!
+        #expect(Filename.mediaName(pageTitle: "Facebook", url: hash, contentType: "video/mp4", videoId: "26934216426212982") == "Facebook 26934216426212982.mp4")
+        #expect(Filename.mediaName(pageTitle: "Sunset over Manila | Facebook", url: hash, contentType: "video/mp4", videoId: "1") == "Sunset over Manila - Facebook.mp4")
+        #expect(Filename.mediaName(pageTitle: nil, url: hash, contentType: "video/mp4", videoId: "99") == "AQNwtkB9F6JmSviz4edJ.mp4")
+    }
 }

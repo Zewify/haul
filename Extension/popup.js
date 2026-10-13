@@ -31,7 +31,7 @@ async function render() {
   $('mediaSection').hidden = !state.media;
   if (state.media) {
     const items = state.items || [];
-    const fromPage = items.filter((i) => i.label);
+    const fromPage = items.filter((i) => i.label || i.kind === 'page');
     const seen = items.filter((i) => !i.label).slice().reverse();
     $('noMedia').hidden = items.length > 0;
     $('pageGroup').hidden = fromPage.length === 0;

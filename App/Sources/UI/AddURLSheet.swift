@@ -11,7 +11,7 @@ struct AddURLSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Add downloads").font(.headline)
-            Text("One link per line. Haul checks each link and names the file as the server does.")
+            Text("One link per line, then ⌘↩. Haul checks each link and names the file as the server does. A Facebook video link is read for its video and audio tracks.")
                 .font(.callout).foregroundStyle(.secondary)
             TextEditor(text: $text)
                 .font(.body.monospaced())
@@ -22,7 +22,8 @@ struct AddURLSheet: View {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(adding ? "Adding…" : "Add") { add() }
-                    .keyboardShortcut(.defaultAction)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .help("Add (⌘↩)")
                     .disabled(adding || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }

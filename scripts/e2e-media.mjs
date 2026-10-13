@@ -72,7 +72,7 @@ try {
   const state = await ask({ type: 'status', tabId: tab.id, tabUrl: tab.url });
   console.log(`sniffed ${state.items.length} item(s):`);
   for (const item of state.items) console.log(`  ${item.kind}  ${item.label || item.contentType || '-'}  ${item.size || '?'}  ${item.url.slice(0, 100)}`);
-  const pick = state.items.find((i) => i.kind === 'dash' && /^This video/.test(i.label || '')) || state.items.find((i) => i.kind === 'dash') || state.items.find((i) => i.kind === 'hls')
+  const pick = state.items.find((i) => i.kind === 'page') || state.items.find((i) => i.kind === 'dash' && /^This video/.test(i.label || '')) || state.items.find((i) => i.kind === 'dash') || state.items.find((i) => i.kind === 'hls')
     || state.items.filter((i) => i.kind === 'file').sort((a, b) => (b.size || 0) - (a.size || 0))[0];
   if (!pick) throw new Error('nothing to grab');
   console.log('grabbing', pick.kind, pick.url.slice(0, 120));

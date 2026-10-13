@@ -4,9 +4,10 @@
     return (cookies || []).map((c) => `${c.name}=${c.value}`).join('; ');
   }
 
-  function buildDownloadBody({ url, filename, referrer, cookies, userAgent, pageTitle, kind, audioUrl }) {
+  function buildDownloadBody({ url, filename, referrer, cookies, userAgent, pageTitle, kind, audioUrl, videoId }) {
     const body = { url };
     if (audioUrl) body.audioUrl = audioUrl;
+    if (videoId) body.videoId = String(videoId);
     if (filename) body.filename = filename;
     if (referrer) body.referrer = referrer;
     if (cookies) body.cookies = cookies;

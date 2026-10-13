@@ -220,11 +220,15 @@ final class AppModel {
     enum AddError: Error, LocalizedError {
         case notAURL(String)
         case probe(String, String)
+        case webPage(String)
+        case noVideoOnPage(String)
 
         var errorDescription: String? {
             switch self {
             case .notAURL(let text): "“\(text)” is not an http or https link."
             case .probe(let url, let message): "\(url): \(message)"
+            case .webPage(let url): "\(url) is a web page, not a file. Open it in your browser and use the Haul extension to grab what is on it."
+            case .noVideoOnPage(let url): "No video found on \(url). It may need a login, or the post may be private; open it in your browser and use the Haul extension."
             }
         }
     }
@@ -242,12 +246,28 @@ final class AppModel {
             } catch {
                 throw AddError.probe(line, Self.describe(error))
             }
+            if probe.contentType == "text/html" {
+                // A page, not a file: a Facebook video page can still be read for its tracks; anything else needs the extension.
+                guard gate.offersMedia, FacebookPage.isFacebook(url) else { throw AddError.webPage(line) }
+                guard let download = try await facebookDownload(for: url) else { throw AddError.noVideoOnPage(line) }
+                engine.add(download)
+                continue
+            }
             var download = Download(url: url, name: probe.suggestedName, folder: folder)
             download.finalURL = probe.finalURL
             download.size = probe.size
             download.contentType = probe.contentType
             engine.add(download)
         }
+    }
+
+    /// Loads a Facebook video page offscreen as a browser would (a plain fetch is refused, and the page fills itself
+    /// by script): first as Safari, which gets progressive H.264 files, then as Chrome, which gets the DASH table.
+    func facebookDownload(for url: URL) async throws -> Download? {
+        let safariHTML = try await PageReader(as: .safari).html(of: url)
+        if let download = FacebookPage.download(for: url, html: safariHTML, folder: folder) { return download }
+        let chromeHTML = try await PageReader(as: .chrome).html(of: url)
+        return FacebookPage.download(for: url, html: chromeHTML, folder: folder)
     }
 
     static func describe(_ error: Error) -> String {
@@ -299,12 +319,28 @@ final class AppModel {
             pending.name = Filename.mediaName(pageTitle: incoming.pageTitle ?? "Stream", url: url, contentType: nil)
             return pending
         }
+        if incoming.kind == "page" {
+            // The extension hands over the page itself; Haul reads it as Safari would and takes the H.264 file.
+            guard FacebookPage.isFacebook(url) else { pending.error = "Haul can only read Facebook video pages"; return pending }
+            do {
+                guard let download = try await facebookDownload(for: url) else {
+                    pending.error = "No video found on that page (it may need a login)"
+                    return pending
+                }
+                pending.incoming = IncomingDownload(url: download.url.absoluteString, referrer: incoming.referrer, cookies: incoming.cookies, userAgent: incoming.userAgent,
+                                                    kind: "dash", pageTitle: incoming.pageTitle, audioUrl: download.audioURL?.absoluteString, videoId: incoming.videoId)
+                pending.name = download.name
+            } catch {
+                pending.error = Self.describe(error)
+            }
+            return pending
+        }
         if kind == .dash {
             guard let audio = incoming.audioUrl, let audioURL = URL(string: audio), ["http", "https"].contains(audioURL.scheme?.lowercased() ?? "") else {
                 pending.error = "The stream names no audio track"
                 return pending
             }
-            pending.name = Filename.mediaName(pageTitle: incoming.pageTitle ?? "Video", url: url, contentType: "video/mp4")
+            pending.name = Filename.mediaName(pageTitle: incoming.pageTitle ?? "Video", url: url, contentType: "video/mp4", videoId: incoming.videoId)
             if let probe = try? await Probe.run(url, context: incoming.context, session: session) { pending.probe = probe }
             return pending
         }
@@ -315,7 +351,7 @@ final class AppModel {
             if let filename = incoming.filename {
                 pending.name = Filename.sanitised(filename)
             } else if media, !headerNamedIt {
-                pending.name = Filename.mediaName(pageTitle: incoming.pageTitle, url: probe.finalURL, contentType: probe.contentType)
+                pending.name = Filename.mediaName(pageTitle: incoming.pageTitle, url: probe.finalURL, contentType: probe.contentType, videoId: incoming.videoId)
             } else {
                 pending.name = probe.suggestedName
             }

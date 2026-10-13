@@ -12,7 +12,7 @@ test('body carries only what is set', () => {
   const body = buildDownloadBody({ url: 'https://x.com/a.zip', filename: 'a.zip', referrer: 'https://x.com/', cookies: 'a=1', userAgent: 'UA', pageTitle: 'T', kind: 'hls' });
   assert.deepEqual(body, { url: 'https://x.com/a.zip', filename: 'a.zip', referrer: 'https://x.com/', cookies: 'a=1', userAgent: 'UA', pageTitle: 'T', kind: 'hls' });
   assert.deepEqual(buildDownloadBody({ url: 'https://x.com/a.zip', cookies: '', filename: '' }), { url: 'https://x.com/a.zip' });
-  assert.deepEqual(buildDownloadBody({ url: 'https://x.com/v.mp4', kind: 'dash', audioUrl: 'https://x.com/a.mp4' }), { url: 'https://x.com/v.mp4', kind: 'dash', audioUrl: 'https://x.com/a.mp4' });
+  assert.deepEqual(buildDownloadBody({ url: 'https://x.com/v.mp4', kind: 'dash', audioUrl: 'https://x.com/a.mp4', videoId: '26934216426212982' }), { url: 'https://x.com/v.mp4', kind: 'dash', audioUrl: 'https://x.com/a.mp4', videoId: '26934216426212982' });
 });
 
 test('only http and https urls are sent', () => {

@@ -142,13 +142,41 @@
         if (!best || v.height > best.height || (v.height === best.height && v.bandwidth > best.bandwidth)) families.set(family.name, { ...v, family });
       }
       for (const v of [...families.values()].sort((a, b) => b.family.rank - a.family.rank)) {
-        items.push({ kind: 'dash', videoId, url: v.url, audioUrl: audio.url,
+        items.push({ kind: 'dash', videoId, url: v.url, audioUrl: audio.url, codecs: v.codecs,
           label: `${own ? 'This video' : 'Another video on this page'} · ${v.height}p ${v.family.name} · video + audio${v.family.note}`,
           duration: entry.duration, width: v.width, height: v.height, codec: v.family.name });
       }
     }
     items.sort((a, b) => (b.videoId === currentVideoId) - (a.videoId === currentVideoId));
     return items;
+  }
+
+  // Which video the user means: the url's id when the page offers that video; otherwise whichever video the player
+  // is fetching right now (a feed preloads neighbours, so this is only a fallback). With neither, nothing is "another".
+  function labelDashItems(items, sniffedUrls, currentVideoId) {
+    const sniffed = new Set((sniffedUrls || []).map(normaliseMediaURL));
+    const playing = new Set(items.filter((i) => sniffed.has(normaliseMediaURL(i.url)) || sniffed.has(normaliseMediaURL(i.audioUrl || ''))).map((i) => i.videoId));
+    const byUrl = currentVideoId && items.some((i) => i.videoId === currentVideoId) ? new Set([currentVideoId]) : null;
+    const current = byUrl || (playing.size ? playing : null);
+    const labelled = items.map((i) => {
+      const own = current ? current.has(i.videoId) : null;
+      const who = own === null ? 'Video on this page' : own ? 'This video' : 'Another video on this page';
+      const family = codecFamily(i.codecs) || { name: i.codec || 'video', note: i.codec === 'AV1' ? ' · plays on newer Macs only' : '' };
+      return { ...i, own: !!own, label: `${who} · ${i.height}p ${family.name} · video + audio${family.note}` };
+    });
+    labelled.sort((a, b) => (b.own - a.own) || (b.videoId === a.videoId ? 0 : 0));
+    return labelled;
+  }
+
+  // On a Facebook video page the surest grab is to let Haul read the page itself as Safari would: Facebook then
+  // offers a progressive H.264 file, while Chrome is served VP9 or AV1 tracks a Mac may not play.
+  function pageReaderItem(tabUrl) {
+    let host;
+    try { host = new URL(tabUrl).host.toLowerCase(); } catch { return null; }
+    if (!(host === 'facebook.com' || host.endsWith('.facebook.com'))) return null;
+    const videoId = pageVideoId(tabUrl);
+    if (!videoId) return null;
+    return { kind: 'page', url: tabUrl, videoId, label: 'This video · 720p H.264 · Haul reads the page' };
   }
 
   // A DASH manifest (Facebook's dash_mpd_debug.mpd?v=<id>, fetched with the user's session) for one video.
@@ -189,6 +217,7 @@
       host = u.host;
       name = decodeURIComponent(u.pathname.slice(u.pathname.lastIndexOf('/') + 1));
     } catch { name = item.url; }
+    if ((item.kind === 'dash' || item.kind === 'page') && item.videoId) name = `video ${item.videoId}`;
     const type = (item.contentType || '').split(';')[0].trim().toLowerCase();
     const format = type.split('/')[1] || extensionOf(item.url);
     let title;
@@ -200,7 +229,7 @@
     return { title, subtitle: [host, name].filter(Boolean).join(' · ') };
   }
 
-  const api = { classifyResponse, describeMedia, formatSize, normaliseMediaURL, findInPage, findDashSets, pageVideoId, parseMPD };
+  const api = { classifyResponse, describeMedia, formatSize, normaliseMediaURL, findInPage, findDashSets, pageVideoId, parseMPD, labelDashItems, pageReaderItem };
   root.HaulMedia = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(globalThis);

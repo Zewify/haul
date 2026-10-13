@@ -82,10 +82,12 @@ public enum Filename {
 
     /// A name for a video grabbed from a page: the page's title (minus a " | Site" suffix) with the file's extension,
     /// because CDN names are hashes; the URL's own name when there is no title.
-    public static func mediaName(pageTitle: String?, url: URL, contentType: String?) -> String {
+    public static func mediaName(pageTitle: String?, url: URL, contentType: String?, videoId: String? = nil) -> String {
         let urlName = sanitised(fromURL(url))
         let ext = fileExtension(for: contentType) ?? (url.pathExtension.isEmpty ? nil : url.pathExtension.lowercased())
         var title = (pageTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        // A bare site name ("Facebook") names nothing; the video's id at least tells two grabs apart.
+        if let videoId, !title.isEmpty, !title.contains(" "), !title.contains("|"), !title.contains("-") { title += " " + videoId }
         guard !title.isEmpty else {
             if let ext, (urlName as NSString).pathExtension.lowercased() != ext { return urlName + "." + ext }
             return urlName

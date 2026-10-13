@@ -93,13 +93,13 @@ async function pair() {
 }
 
 /// Sends a URL to the app. Returns {ok, error}.
-async function handOver(url, { filename, referrer, pageTitle, kind, audioUrl } = {}) {
+async function handOver(url, { filename, referrer, pageTitle, kind, audioUrl, videoId } = {}) {
   if (!HaulRequest.isHTTP(url)) return { ok: false, error: 'Not an http link' };
   const s = await settings();
   if (!s.token) return { ok: false, error: 'Not connected to Haul' };
   let cookies = '';
   try { cookies = HaulRequest.cookieHeader(await api.cookies.getAll({ url })); } catch { /* no cookie permission */ }
-  const body = HaulRequest.buildDownloadBody({ url, filename, referrer, cookies, userAgent: navigator.userAgent, pageTitle, kind, audioUrl });
+  const body = HaulRequest.buildDownloadBody({ url, filename, referrer, cookies, userAgent: navigator.userAgent, pageTitle, kind, audioUrl, videoId });
   const result = await post(kind ? '/media' : '/downloads', body);
   if (result.ok) return { ok: true, id: result.json && result.json.id };
   if (result.status === 401) await api.storage.local.set({ token: null });
@@ -212,12 +212,18 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const s = await settings();
         const tabId = message.tabId;
         let items = tabId != null ? (mediaByTab.get(tabId) || []) : [];
-        if (state.media && tabId != null) items = (await pageItems(tabId, message.tabUrl)).concat(items);
+        if (state.media && tabId != null) {
+          const fromPage = await pageItems(tabId, message.tabUrl);
+          const sniffedUrls = items.map((i) => i.url);
+          const dash = HaulMedia.labelDashItems(fromPage.filter((i) => i.kind === 'dash'), sniffedUrls, HaulMedia.pageVideoId(message.tabUrl || ''));
+          const reader = HaulMedia.pageReaderItem(message.tabUrl || '');
+          items = (reader ? [reader] : []).concat(dash).concat(fromPage.filter((i) => i.kind !== 'dash')).concat(items);
+        }
         return { ...state, capture: s.capture, port: s.port, media: state.media, items };
       }
       case 'pair': return pair();
       case 'download': return handOver(message.url, { referrer: message.referrer || (sender.tab && sender.tab.url), pageTitle: message.pageTitle || (sender.tab && sender.tab.title) });
-      case 'grab': return handOver(message.item.url, { referrer: message.referrer, pageTitle: message.pageTitle, kind: message.item.kind, audioUrl: message.item.audioUrl });
+      case 'grab': return handOver(message.item.url, { referrer: message.referrer, pageTitle: message.pageTitle, kind: message.item.kind, audioUrl: message.item.audioUrl, videoId: message.item.videoId });
       case 'setCapture': await api.storage.local.set({ capture: !!message.value }); return { ok: true };
       case 'setPort': await api.storage.local.set({ port: Number(message.value) || 48512 }); return refreshStatus();
 

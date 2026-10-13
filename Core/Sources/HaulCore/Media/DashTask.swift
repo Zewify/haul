@@ -37,6 +37,10 @@ public actor DashTask {
         var finishedParts: [Download] = []
         for (index, piece) in [videoPart, audioPart].enumerated() {
             if paused || cancelled { break }
+            // A first track that already carries sound needs no second one (some sites label a muxed file as "video").
+            if index == 1, let first = finishedParts.first?.finalPath, let info = await MediaInfo.inspect(URL(fileURLWithPath: first)), info.hasVideo, info.hasAudio {
+                return finish(with: first, discarding: finishedParts)
+            }
             let task = DownloadTask(download: piece, connections: connections, session: session, retryDelays: retryDelays) { [weak self] progress in
                 Task { await self?.progressed(progress, part: index) }
             }
@@ -67,6 +71,16 @@ public actor DashTask {
             emit()
             return download
         }
+        let second = await MediaInfo.inspect(URL(fileURLWithPath: a))
+        if second?.hasAudio != true {
+            if second?.hasVideo == true, let first = await MediaInfo.inspect(URL(fileURLWithPath: v)), first.hasAudio, first.hasVideo {
+                return finish(with: v, discarding: finishedParts)
+            }
+            finishParts(finishedParts, keep: false)
+            download.state = .failed("The site offered no sound for this video (no audio track in either part).")
+            emit()
+            return download
+        }
         // The engine claimed this name with an empty part file at add time; that claim is ours to ignore and remove.
         let ownPart = Filename.partName(for: download.name)
         let output = download.folder.appendingPathComponent(Filename.available(download.name, in: download.folder, ignoring: [ownPart]))
@@ -84,6 +98,26 @@ public actor DashTask {
             download.state = .failed(failure.message + " The video and audio parts were kept.")
         } catch {
             download.state = .failed(error.localizedDescription)
+        }
+        emit()
+        return download
+    }
+
+    /// A part that is already the whole video becomes the result; the other parts and the claimed name go.
+    private func finish(with path: String, discarding parts: [Download]) -> Download {
+        let ownPart = Filename.partName(for: download.name)
+        let output = download.folder.appendingPathComponent(Filename.available(download.name, in: download.folder, ignoring: [ownPart]))
+        do {
+            try FileManager.default.moveItem(at: URL(fileURLWithPath: path), to: output)
+            finishParts(parts.filter { $0.finalPath != path }, keep: false)
+            try? FileManager.default.removeItem(at: download.folder.appendingPathComponent(ownPart))
+            download.finalPath = output.path
+            download.partPath = nil
+            download.size = (try? FileManager.default.attributesOfItem(atPath: output.path)[.size] as? Int64) ?? nil
+            download.finished = Date()
+            download.state = .finished
+        } catch {
+            download.state = .failed("Could not place the file: \(error.localizedDescription)")
         }
         emit()
         return download

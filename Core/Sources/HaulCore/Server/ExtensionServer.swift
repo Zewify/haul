@@ -15,9 +15,11 @@ public struct IncomingDownload: Codable, Sendable, Hashable {
     public var pageTitle: String?
     /// For `dash`: the audio track; `url` is the video track.
     public var audioUrl: String?
+    /// The site's id for the video, for naming when the page title names nothing.
+    public var videoId: String?
 
     public init(url: String, filename: String? = nil, referrer: String? = nil, cookies: String? = nil, userAgent: String? = nil,
-                headers: [String: String]? = nil, kind: String? = nil, pageTitle: String? = nil, audioUrl: String? = nil) {
+                headers: [String: String]? = nil, kind: String? = nil, pageTitle: String? = nil, audioUrl: String? = nil, videoId: String? = nil) {
         self.url = url
         self.filename = filename
         self.referrer = referrer
@@ -27,6 +29,7 @@ public struct IncomingDownload: Codable, Sendable, Hashable {
         self.kind = kind
         self.pageTitle = pageTitle
         self.audioUrl = audioUrl
+        self.videoId = videoId
     }
 
     public var context: RequestContext {
