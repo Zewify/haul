@@ -8,7 +8,7 @@ async function currentTab() {
 
 async function render() {
   const tab = await currentTab();
-  const state = await api.runtime.sendMessage({ type: 'status', tabId: tab && tab.id });
+  const state = await api.runtime.sendMessage({ type: 'status', tabId: tab && tab.id, tabUrl: tab && tab.url });
   $('connect').hidden = true; $('down').hidden = true; $('ready').hidden = true;
   const dot = $('dot');
   dot.className = 'dot';

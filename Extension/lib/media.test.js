@@ -95,3 +95,25 @@ test('the page video id comes from reel and watch urls', () => {
   assert.equal(pageVideoId('https://www.facebook.com/someone/videos/987654/'), '987654');
   assert.equal(pageVideoId('https://example.com/page'), null);
 });
+
+const { parseMPD } = require('./media.js');
+
+test('a DASH manifest becomes joinable items the same way the page table does', () => {
+  const xml = `<?xml version="1.0"?><MPD xmlns="urn:mpeg:dash:schema:mpd:2011" mediaPresentationDuration="PT0H15M0.0S" type="static">
+  <Period>
+    <AdaptationSet segmentAlignment="true" maxWidth="1080" mimeType="video/mp4">
+      <Representation id="2297632240762264v" mimeType="video/mp4" codecs="avc1.64001F" width="720" height="720" bandwidth="800000" FBQualityLabel="720p"><BaseURL>https://video.xx.fbcdn.net/v/v720.mp4?x=1&amp;y=2</BaseURL><SegmentBase indexRange="804-2995"><Initialization range="0-803"/></SegmentBase></Representation>
+      <Representation id="1693970385122294v" mimeType="video/mp4" codecs="av01.0.08M.08" width="1080" height="1080" bandwidth="900000"><BaseURL>https://video.xx.fbcdn.net/v/v1080.mp4</BaseURL></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" mimeType="audio/mp4">
+      <Representation id="1234a" mimeType="audio/mp4" codecs="mp4a.40.2" audioSamplingRate="48000" bandwidth="128000"><BaseURL>https://video.xx.fbcdn.net/v/a128.mp4</BaseURL></Representation>
+      <Representation id="1235a" mimeType="audio/mp4" codecs="mp4a.40.5" bandwidth="48000"><BaseURL>https://video.xx.fbcdn.net/v/a48.mp4</BaseURL></Representation>
+    </AdaptationSet>
+  </Period></MPD>`;
+  const items = parseMPD(xml, '26934216426212982');
+  assert.deepEqual(items, [
+    { kind: 'dash', videoId: '26934216426212982', url: 'https://video.xx.fbcdn.net/v/v720.mp4?x=1&y=2', audioUrl: 'https://video.xx.fbcdn.net/v/a128.mp4', label: 'This video · 720p H.264 · video + audio', duration: 900, width: 720, height: 720, codec: 'H.264' },
+    { kind: 'dash', videoId: '26934216426212982', url: 'https://video.xx.fbcdn.net/v/v1080.mp4', audioUrl: 'https://video.xx.fbcdn.net/v/a128.mp4', label: 'This video · 1080p AV1 · video + audio · plays on newer Macs only', duration: 900, width: 1080, height: 1080, codec: 'AV1' },
+  ]);
+  assert.deepEqual(parseMPD('<html>login</html>', '1'), []);
+});

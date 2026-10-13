@@ -69,7 +69,7 @@ try {
   const tab = JSON.parse(tabs.result.result.value).find((t) => t.url && t.url.startsWith(pageURL.split('?')[0].slice(0, 30)));
   if (!tab) throw new Error('could not find the page tab');
   console.log('page title:', tab.title, '| url:', tab.url);
-  const state = await ask({ type: 'status', tabId: tab.id });
+  const state = await ask({ type: 'status', tabId: tab.id, tabUrl: tab.url });
   console.log(`sniffed ${state.items.length} item(s):`);
   for (const item of state.items) console.log(`  ${item.kind}  ${item.label || item.contentType || '-'}  ${item.size || '?'}  ${item.url.slice(0, 100)}`);
   const pick = state.items.find((i) => i.kind === 'dash' && /^This video/.test(i.label || '')) || state.items.find((i) => i.kind === 'dash') || state.items.find((i) => i.kind === 'hls')

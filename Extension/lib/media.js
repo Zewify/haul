@@ -124,6 +124,11 @@
         }
       }
     }
+    return itemsFor(byVideo, currentVideoId);
+  }
+
+  // One joinable item per codec family per video, H.264 first, the loudest audio, the page's own video first.
+  function itemsFor(byVideo, currentVideoId) {
     const items = [];
     for (const [videoId, entry] of byVideo) {
       if (!entry.video.length || !entry.audio.length) continue;
@@ -144,6 +149,28 @@
     }
     items.sort((a, b) => (b.videoId === currentVideoId) - (a.videoId === currentVideoId));
     return items;
+  }
+
+  // A DASH manifest (Facebook's dash_mpd_debug.mpd?v=<id>, fetched with the user's session) for one video.
+  function parseMPD(xml, videoId) {
+    if (!/<MPD[\s>]/.test(xml)) return [];
+    const unescape = (t) => t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    const attrs = (tag) => Object.fromEntries([...tag.matchAll(/(\w+)="([^"]*)"/g)].map((m) => [m[1], m[2]]));
+    const durationMatch = /mediaPresentationDuration="PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?"/.exec(xml);
+    const duration = durationMatch ? (Number(durationMatch[1] || 0) * 3600 + Number(durationMatch[2] || 0) * 60 + Number(durationMatch[3] || 0)) : undefined;
+    const entry = { video: [], audio: [], duration };
+    for (const set of xml.matchAll(/<AdaptationSet([^>]*)>([\s\S]*?)<\/AdaptationSet>/g)) {
+      const setMime = attrs(set[1]).mimeType || '';
+      for (const rep of set[2].matchAll(/<Representation([^>]*)>([\s\S]*?)<\/Representation>/g)) {
+        const a = attrs(rep[1]);
+        const base = /<BaseURL>([^<]+)<\/BaseURL>/.exec(rep[2]);
+        if (!base) continue;
+        const mime = a.mimeType || setMime;
+        const item = { url: unescape(base[1].trim()), codecs: a.codecs, width: Number(a.width || 0), height: Number(a.height || 0), bandwidth: Number(a.bandwidth || 0) };
+        (mime.startsWith('audio/') ? entry.audio : entry.video).push(item);
+      }
+    }
+    return itemsFor(new Map([[videoId, entry]]), videoId);
   }
 
   function formatSize(bytes) {
@@ -173,7 +200,7 @@
     return { title, subtitle: [host, name].filter(Boolean).join(' · ') };
   }
 
-  const api = { classifyResponse, describeMedia, formatSize, normaliseMediaURL, findInPage, findDashSets, pageVideoId };
+  const api = { classifyResponse, describeMedia, formatSize, normaliseMediaURL, findInPage, findDashSets, pageVideoId, parseMPD };
   root.HaulMedia = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(globalThis);

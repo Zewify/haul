@@ -181,13 +181,23 @@ function installMediaSniffer() {
   });
 }
 
-/// What the page's own source says about its video: muxed progressive files the sniffer never sees as one request.
-async function pageItems(tabId) {
+/// What the page's own source says about its video: muxed progressive files the sniffer never sees as one request,
+/// Facebook's signed-in and signed-out pages both embed their DASH representation table, so no extra fetch is needed.
+async function pageItems(tabId, tabUrl) {
+  const scan = async () => {
+    const scanned = await api.tabs.sendMessage(tabId, { type: 'scan' }, { frameId: 0 });
+    return Array.isArray(scanned) ? scanned : [];
+  };
   try {
-    const found = await api.tabs.sendMessage(tabId, { type: 'scan' }, { frameId: 0 });
-    return Array.isArray(found) ? found : [];
+    return await scan();
   } catch {
-    return [];
+    // A tab opened before the extension was installed or reloaded has no content script yet; put one in and ask again.
+    try {
+      await api.scripting.executeScript({ target: { tabId, frameIds: [0] }, files: ['lib/links.js', 'lib/media.js', 'content.js'] });
+      return await scan();
+    } catch {
+      return [];
+    }
   }
 }
 
@@ -202,7 +212,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const s = await settings();
         const tabId = message.tabId;
         let items = tabId != null ? (mediaByTab.get(tabId) || []) : [];
-        if (state.media && tabId != null) items = (await pageItems(tabId)).concat(items);
+        if (state.media && tabId != null) items = (await pageItems(tabId, message.tabUrl)).concat(items);
         return { ...state, capture: s.capture, port: s.port, media: state.media, items };
       }
       case 'pair': return pair();
