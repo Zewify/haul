@@ -164,10 +164,12 @@ function installMediaSniffer() {
     const header = (details.responseHeaders || []).find((h) => h.name.toLowerCase() === 'content-type');
     const kind = HaulMedia.classifyResponse(details.url, header && header.value);
     if (!kind) return;
-    const length = (details.responseHeaders || []).find((h) => h.name.toLowerCase() === 'content-length');
+    const url = HaulMedia.normaliseMediaURL(details.url);
     const list = mediaByTab.get(details.tabId) || [];
-    if (list.some((item) => item.url === details.url)) return;
-    list.push({ url: details.url, kind, contentType: header && header.value.split(';')[0], size: length ? Number(length.value) : undefined, seen: Date.now() });
+    if (list.some((item) => item.url === url)) return;
+    // The size is only meaningful when the response was the whole file, not one chunk of it.
+    const length = url === details.url ? (details.responseHeaders || []).find((h) => h.name.toLowerCase() === 'content-length') : null;
+    list.push({ url, kind, contentType: header && header.value.split(';')[0], size: length ? Number(length.value) : undefined, seen: Date.now() });
     if (list.length > 30) list.shift();
     mediaByTab.set(details.tabId, list);
     api.action.setBadgeText({ text: String(list.length), tabId: details.tabId });
@@ -177,6 +179,16 @@ function installMediaSniffer() {
   api.webNavigation && api.webNavigation.onCommitted && api.webNavigation.onCommitted.addListener((details) => {
     if (details.frameId === 0) mediaByTab.delete(details.tabId);
   });
+}
+
+/// What the page's own source says about its video: muxed progressive files the sniffer never sees as one request.
+async function pageItems(tabId) {
+  try {
+    const found = await api.tabs.sendMessage(tabId, { type: 'scan' });
+    return Array.isArray(found) ? found : [];
+  } catch {
+    return [];
+  }
 }
 
 // MARK: Messages from the popup and content scripts
@@ -189,7 +201,9 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         const s = await settings();
         const tabId = message.tabId;
-        return { ...state, capture: s.capture, port: s.port, media: state.media, items: tabId != null ? (mediaByTab.get(tabId) || []) : [] };
+        let items = tabId != null ? (mediaByTab.get(tabId) || []) : [];
+        if (state.media && tabId != null) items = (await pageItems(tabId)).concat(items);
+        return { ...state, capture: s.capture, port: s.port, media: state.media, items };
       }
       case 'pair': return pair();
       case 'download': return handOver(message.url, { referrer: message.referrer || (sender.tab && sender.tab.url), pageTitle: message.pageTitle || (sender.tab && sender.tab.title) });

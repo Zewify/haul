@@ -80,6 +80,36 @@ public enum Filename {
 
     public static func partName(for name: String) -> String { name + "." + partExtension }
 
+    /// A name for a video grabbed from a page: the page's title (minus a " | Site" suffix) with the file's extension,
+    /// because CDN names are hashes; the URL's own name when there is no title.
+    public static func mediaName(pageTitle: String?, url: URL, contentType: String?) -> String {
+        let urlName = sanitised(fromURL(url))
+        let ext = fileExtension(for: contentType) ?? (url.pathExtension.isEmpty ? nil : url.pathExtension.lowercased())
+        var title = (pageTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else {
+            if let ext, (urlName as NSString).pathExtension.lowercased() != ext { return urlName + "." + ext }
+            return urlName
+        }
+        title = title.replacingOccurrences(of: " | ", with: " - ").replacingOccurrences(of: " – ", with: " - ")
+        let base = sanitised(title)
+        guard let ext, ext != "m3u8" else { return base }
+        return base.lowercased().hasSuffix("." + ext) ? base : base + "." + ext
+    }
+
+    static func fileExtension(for contentType: String?) -> String? {
+        switch contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() {
+        case "video/mp4", "video/x-m4v": "mp4"
+        case "video/webm": "webm"
+        case "video/quicktime": "mov"
+        case "video/x-matroska": "mkv"
+        case "audio/mpeg": "mp3"
+        case "audio/mp4", "audio/x-m4a": "m4a"
+        case "audio/ogg": "ogg"
+        case "audio/wav", "audio/x-wav": "wav"
+        default: nil
+        }
+    }
+
     private static func isTaken(_ name: String, in folder: URL, ignoring: Set<String>, fileManager: FileManager) -> Bool {
         for candidate in [name, partName(for: name)] where !ignoring.contains(candidate) {
             if fileManager.fileExists(atPath: folder.appendingPathComponent(candidate).path) { return true }

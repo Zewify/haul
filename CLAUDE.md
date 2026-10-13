@@ -20,6 +20,7 @@ Design: `docs/superpowers/specs/2026-10-13-haul-design.md`. Plan: `docs/superpow
 - `./scripts/build.sh [Debug|Release] [--direct]` — generates the project and builds; prints the app path.
 - `./scripts/install-local.sh [--direct]` — Debug build into `/Applications/Haul.app`, then launches it.
 - `HAUL_CHROME=<chrome-for-testing> node scripts/e2e-chrome.mjs <page-url> <file-name>` — the Chrome end-to-end against a running Haul (see the script's header).
+- `HAUL_CHROME=<chrome-for-testing> node scripts/e2e-media.mjs <page-url> [seconds]` — the grabber end-to-end: opens a page in a throwaway Chrome, prints what the sniffer found, grabs it, and waits for the file. Needs the direct edition with Pro (`-HaulForcePro YES`).
 - `swift scripts/make-icon.swift App/Resources/Assets.xcassets/AppIcon.appiconset Extension/icons` — re-renders the icons.
 - `swift scripts/window-shot.swift <dir> <prefix>` — screenshots every Haul window.
 - `cd Core && swift run licensetool issue --key ~/.config/zewify/haul-license.key --id <order> --licensee <name>` — issues a direct-edition Pro licence.
@@ -35,6 +36,8 @@ Design: `docs/superpowers/specs/2026-10-13-haul-design.md`. Plan: `docs/superpow
 - **Google Chrome 137+ ignores `--load-extension`**; the end-to-end uses Chrome for Testing. Users load the folder unpacked from `chrome://extensions` until the Web Store listing exists.
 - **Chrome lists an idle extension worker nowhere**; the e2e finds Haul's id through `chrome://extensions` and talks to the background through the popup page.
 - **Safari needs the extension turned on** in Safari → Settings → Extensions; an ad-hoc build needs "Allow unsigned extensions" in the Develop menu, each Safari launch.
+- **The grabber sees two kinds of thing.** The sniffer (`webRequest`) records media responses, with chunk parameters (`bytestart`, `byteend`, `range`) stripped so a stream fetched in pieces is one item; the page scan (`HaulMedia.findInPage`, asked through the content script) pulls muxed progressive URLs out of the page's own scripts (Facebook's `browser_native_hd_url`/`sd_url`) and plain `<video>` sources. Sites that split audio and video (DASH) give the sniffer separate silent tracks; only the page scan yields a file with sound, and Haul never muxes. Verified on a public Facebook reel on 2026-10-13: 1280x720 H.264 + AAC via the page scan.
+- **Media is named after the page title** (`Filename.mediaName`), because CDN names are hashes; a `Content-Disposition` name still wins.
 - **Licences are verified offline** against `LicenseKeys.production`; the private key is `~/.config/zewify/haul-license.key` on the owner's Mac, never in the repo.
 - **Debug launch arguments:** `-HaulShow settings|catch`, `-HaulForcePro YES`.
 - **A Debug build shares the installed app's sandbox container**, `~/Library/Containers/com.zewify.haul`, and so its `library.json`.

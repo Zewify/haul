@@ -49,3 +49,14 @@ struct FilenameTests {
         #expect(Filename.available("b.zip", in: folder) == "b 2.zip")
     }
 }
+
+struct MediaNameTests {
+    @Test func mediaIsNamedAfterThePageWhenTheURLIsAHash() {
+        let hash = URL(string: "https://video.xx.fbcdn.net/o1/v/t2/f2/m366/AQNT_ORrNM_72Ua5LDXwPUD13LZGcIJrDVl.mp4?efg=1")!
+        #expect(Filename.mediaName(pageTitle: "Sunset over Manila | Facebook", url: hash, contentType: "video/mp4") == "Sunset over Manila - Facebook.mp4")
+        #expect(Filename.mediaName(pageTitle: "Facebook", url: hash, contentType: "video/mp4") == "Facebook.mp4")
+        #expect(Filename.mediaName(pageTitle: nil, url: hash, contentType: "video/mp4") == "AQNT_ORrNM_72Ua5LDXwPUD13LZGcIJrDVl.mp4")
+        #expect(Filename.mediaName(pageTitle: "  ", url: URL(string: "https://c.com/v/clip")!, contentType: "video/webm") == "clip.webm")
+        #expect(Filename.mediaName(pageTitle: "A Clip", url: URL(string: "https://c.com/v/master.m3u8")!, contentType: nil) == "A Clip")
+    }
+}

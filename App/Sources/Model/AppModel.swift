@@ -283,19 +283,25 @@ final class AppModel {
     private func makeCatch(_ incoming: IncomingDownload, media: Bool) async -> PendingCatch {
         let kind: DownloadKind = incoming.kind == "hls" ? .hls : .file
         var pending = PendingCatch(incoming: incoming, media: media, name: "", folder: folder)
-        if kind == .hls {
-            let title = incoming.pageTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            pending.name = Filename.sanitised(title.isEmpty ? "Stream" : title)
-            return pending
-        }
         guard let url = URL(string: incoming.url) else {
             pending.error = "Not a URL"
+            return pending
+        }
+        if kind == .hls {
+            pending.name = Filename.mediaName(pageTitle: incoming.pageTitle ?? "Stream", url: url, contentType: nil)
             return pending
         }
         do {
             let probe = try await Probe.run(url, context: incoming.context, session: session)
             pending.probe = probe
-            pending.name = incoming.filename.map(Filename.sanitised) ?? probe.suggestedName
+            let headerNamedIt = probe.suggestedName != Filename.sanitised(Filename.fromURL(probe.finalURL))
+            if let filename = incoming.filename {
+                pending.name = Filename.sanitised(filename)
+            } else if media, !headerNamedIt {
+                pending.name = Filename.mediaName(pageTitle: incoming.pageTitle, url: probe.finalURL, contentType: probe.contentType)
+            } else {
+                pending.name = probe.suggestedName
+            }
         } catch {
             pending.error = Self.describe(error)
             pending.name = incoming.filename.map(Filename.sanitised) ?? Filename.sanitised(Filename.fromURL(url))

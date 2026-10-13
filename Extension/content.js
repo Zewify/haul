@@ -17,6 +17,14 @@
     });
   });
 
+  // The popup asks for the page's own video sources (direct edition); the store edition's stub finds nothing.
+  api.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!message || message.type !== 'scan') return false;
+    const found = globalThis.HaulMedia && HaulMedia.findInPage ? HaulMedia.findInPage(document.documentElement.outerHTML) : [];
+    sendResponse(found);
+    return false;
+  });
+
   document.addEventListener('click', (event) => {
     if (!connected || !capture) return;
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

@@ -12,7 +12,7 @@
   "options_ui": { "page": "options.html", "open_in_tab": false },
   "background": { "service_worker": "background.js", "type": "module" },
   "content_scripts": [
-    { "matches": ["http://*/*", "https://*/*"], "js": ["lib/links.js", "content.js"], "run_at": "document_start" }
+    { "matches": ["http://*/*", "https://*/*"], "js": ["lib/links.js", "lib/media.js", "content.js"], "run_at": "document_start" }
   ],
   "permissions": ["downloads", "cookies", "contextMenus", "storage", "webRequest", "alarms"],
   "host_permissions": ["<all_urls>"]

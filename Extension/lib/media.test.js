@@ -30,3 +30,25 @@ test('describes a media item for the popup', () => {
   assert.equal(describeMedia({ url: 'https://c.com/v/clip.mp4', kind: 'file', size: 10485760 }), 'clip.mp4 · 10.5 MB');
   assert.equal(describeMedia({ url: 'https://c.com/v/clip', kind: 'file', contentType: 'video/webm' }), 'clip · video/webm');
 });
+
+const { normaliseMediaURL, findInPage } = require('./media.js');
+
+test('chunk range parameters are stripped so one stream is one item', () => {
+  assert.equal(normaliseMediaURL('https://video.xx.fbcdn.net/o1/v/t2/f2/m366/AQN.mp4?efg=abc&bytestart=0&byteend=579646&_nc_cat=1'), 'https://video.xx.fbcdn.net/o1/v/t2/f2/m366/AQN.mp4?efg=abc&_nc_cat=1');
+  assert.equal(normaliseMediaURL('https://c.com/v.mp4?range=0-100'), 'https://c.com/v.mp4');
+  assert.equal(normaliseMediaURL('https://c.com/v.mp4'), 'https://c.com/v.mp4');
+  assert.equal(normaliseMediaURL('nope'), 'nope');
+});
+
+test('progressive video urls are found in a page source, unescaped and deduped', () => {
+  const html = '<script>{"browser_native_hd_url":"https:\\/\\/video.xx.fbcdn.net\\/v\\/hd.mp4?a=1\\u00261","browser_native_sd_url":"https:\\/\\/video.xx.fbcdn.net\\/v\\/sd.mp4?a=2"}</script>'
+    + '<script>{"browser_native_hd_url":"https:\\/\\/video.xx.fbcdn.net\\/v\\/hd.mp4?a=1\\u00261"}</script>'
+    + '<video src="https://cdn.example/clip.webm"></video>';
+  const found = findInPage(html);
+  assert.deepEqual(found, [
+    { url: 'https://video.xx.fbcdn.net/v/hd.mp4?a=1&1', kind: 'file', label: 'HD (video + audio)' },
+    { url: 'https://video.xx.fbcdn.net/v/sd.mp4?a=2', kind: 'file', label: 'SD (video + audio)' },
+    { url: 'https://cdn.example/clip.webm', kind: 'file', label: 'Video on page' },
+  ]);
+  assert.deepEqual(findInPage('<p>nothing</p>'), []);
+});
