@@ -30,25 +30,41 @@ async function render() {
   $('capture').checked = !!state.capture;
   $('mediaSection').hidden = !state.media;
   if (state.media) {
-    const list = $('media');
-    list.textContent = '';
     const items = state.items || [];
+    const fromPage = items.filter((i) => i.label);
+    const seen = items.filter((i) => !i.label).slice().reverse();
     $('noMedia').hidden = items.length > 0;
-    for (const item of items.slice().reverse()) {
-      const li = document.createElement('li');
-      const span = document.createElement('span');
-      span.textContent = HaulMedia.describeMedia(item);
-      span.title = item.url;
-      const button = document.createElement('button');
-      button.textContent = 'Grab';
-      button.addEventListener('click', async () => {
-        button.disabled = true;
-        const result = await api.runtime.sendMessage({ type: 'grab', item, referrer: tab.url, pageTitle: tab.title });
-        button.textContent = result && result.ok ? 'Sent' : (result && result.error) || 'Failed';
-      });
-      li.append(span, button);
-      list.append(li);
-    }
+    $('pageGroup').hidden = fromPage.length === 0;
+    $('seenGroup').hidden = seen.length === 0;
+    fill($('pageMedia'), fromPage, tab);
+    fill($('media'), seen, tab);
+  }
+}
+
+function fill(list, items, tab) {
+  list.textContent = '';
+  for (const item of items) {
+    const li = document.createElement('li');
+    const text = document.createElement('div');
+    text.className = 'text';
+    const { title, subtitle } = HaulMedia.describeMedia(item);
+    const titleEl = document.createElement('span');
+    titleEl.className = 'title';
+    titleEl.textContent = title;
+    const subtitleEl = document.createElement('span');
+    subtitleEl.className = 'subtitle';
+    subtitleEl.textContent = subtitle;
+    text.append(titleEl, subtitleEl);
+    text.title = item.url;
+    const button = document.createElement('button');
+    button.textContent = 'Grab';
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      const result = await api.runtime.sendMessage({ type: 'grab', item, referrer: tab.url, pageTitle: tab.title });
+      button.textContent = result && result.ok ? 'Sent' : (result && result.error) || 'Failed';
+    });
+    li.append(text, button);
+    list.append(li);
   }
 }
 

@@ -67,11 +67,23 @@
     return `${unit === 0 ? value : value.toFixed(1)} ${units[unit]}`;
   }
 
+  // What the item is (first line) and where it came from (second line), because CDN filenames are hashes.
   function describeMedia(item) {
-    let name;
-    try { const path = new URL(item.url).pathname; name = decodeURIComponent(path.slice(path.lastIndexOf('/') + 1)) || new URL(item.url).host; } catch { name = item.url; }
-    const detail = item.label || (item.kind === 'hls' ? 'HLS stream' : (item.size ? formatSize(item.size) : (item.contentType || 'media')));
-    return `${name} · ${detail}`;
+    let host = '', name = '';
+    try {
+      const u = new URL(item.url);
+      host = u.host;
+      name = decodeURIComponent(u.pathname.slice(u.pathname.lastIndexOf('/') + 1));
+    } catch { name = item.url; }
+    const type = (item.contentType || '').split(';')[0].trim().toLowerCase();
+    const format = type.split('/')[1] || extensionOf(item.url);
+    let title;
+    if (item.label) title = item.label;
+    else if (item.kind === 'hls') title = 'Stream (HLS)';
+    else if (type.startsWith('audio/')) title = `Audio (${format})`;
+    else title = format ? `Video (${format})` : 'Video';
+    if (!item.label && item.size) title += ` · ${formatSize(item.size)}`;
+    return { title, subtitle: [host, name].filter(Boolean).join(' · ') };
   }
 
   const api = { classifyResponse, describeMedia, formatSize, normaliseMediaURL, findInPage };

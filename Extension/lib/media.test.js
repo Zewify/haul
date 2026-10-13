@@ -25,10 +25,13 @@ test('stream segments, DASH, pages and images are ignored', () => {
   assert.equal(classifyResponse('https://c.com/v/range', 'video/mp4', { status: 206, range: 'bytes 1000-2000/5000' }), 'file', 'ranged media responses still count');
 });
 
-test('describes a media item for the popup', () => {
-  assert.equal(describeMedia({ url: 'https://c.com/v/master.m3u8', kind: 'hls' }), 'master.m3u8 · HLS stream');
-  assert.equal(describeMedia({ url: 'https://c.com/v/clip.mp4', kind: 'file', size: 10485760 }), 'clip.mp4 · 10.5 MB');
-  assert.equal(describeMedia({ url: 'https://c.com/v/clip', kind: 'file', contentType: 'video/webm' }), 'clip · video/webm');
+test('describes a media item for the popup: what it is first, where it came from second', () => {
+  assert.deepEqual(describeMedia({ url: 'https://c.com/v/master.m3u8', kind: 'hls' }), { title: 'Stream (HLS)', subtitle: 'c.com · master.m3u8' });
+  assert.deepEqual(describeMedia({ url: 'https://c.com/v/clip.mp4', kind: 'file', size: 10485760, contentType: 'video/mp4' }), { title: 'Video (mp4) · 10.5 MB', subtitle: 'c.com · clip.mp4' });
+  assert.deepEqual(describeMedia({ url: 'https://c.com/v/clip', kind: 'file', contentType: 'video/webm' }), { title: 'Video (webm)', subtitle: 'c.com · clip' });
+  assert.deepEqual(describeMedia({ url: 'https://c.com/a/track', kind: 'file', contentType: 'audio/mp4' }), { title: 'Audio (mp4)', subtitle: 'c.com · track' });
+  assert.deepEqual(describeMedia({ url: 'https://video.xx.fbcdn.net/v/AQPnrSrokbMLDufWCQ7y3NO00bw88F.mp4?x=1', kind: 'file', label: 'HD (video + audio)' }),
+    { title: 'HD (video + audio)', subtitle: 'video.xx.fbcdn.net · AQPnrSrokbMLDufWCQ7y3NO00bw88F.mp4' });
 });
 
 const { normaliseMediaURL, findInPage } = require('./media.js');

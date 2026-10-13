@@ -15,7 +15,10 @@
     label { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
     ul { list-style: none; padding: 0; margin: 8px 0 0; max-height: 240px; overflow: auto; }
     li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent); }
-    li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    li .text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    li .title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    li .subtitle { font-size: 11px; color: color-mix(in srgb, currentColor 50%, transparent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    h2 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin: 10px 0 2px; color: color-mix(in srgb, currentColor 55%, transparent); }
     .error { color: #ff453a; }
     .muted { color: color-mix(in srgb, currentColor 55%, transparent); font-size: 12px; }
   </style>
@@ -34,8 +37,15 @@
   <div id="ready" hidden>
     <label><input type="checkbox" id="capture"> Catch downloads</label>
     <div id="mediaSection" hidden>
-      <p class="muted">Media found on this page</p>
-      <ul id="media"></ul>
+      <div id="pageGroup" hidden>
+        <h2>From this page · with audio</h2>
+        <ul id="pageMedia"></ul>
+      </div>
+      <div id="seenGroup" hidden>
+        <h2>Seen while playing · may be silent</h2>
+        <p class="muted">Sites that stream audio and video separately give silent files here.</p>
+        <ul id="media"></ul>
+      </div>
       <p class="muted" id="noMedia">Nothing yet. Play a video and look again.</p>
     </div>
     <p class="muted"><a href="#" id="options">Options</a> · <a href="#" id="disconnect">Disconnect</a></p>
