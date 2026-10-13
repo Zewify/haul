@@ -111,19 +111,27 @@ public actor DownloadTask {
                 setState(.paused)
             }
         } catch let failure as DownloadFailure {
-            closeHandles()
-            setState(.failed(failure.message))
+            fail(failure.message)
         } catch let error as ProbeError {
-            closeHandles()
             switch error {
-            case .status(let code): setState(.failed("The server answered \(code)."))
-            case .notHTTP: setState(.failed("Only http and https links can be downloaded."))
+            case .status(let code): fail("The server answered \(code).")
+            case .notHTTP: fail("Only http and https links can be downloaded.")
             }
         } catch {
-            closeHandles()
-            setState(.failed(error.localizedDescription))
+            fail(error.localizedDescription)
         }
         return download
+    }
+
+    /// A failure keeps the part file for a retry, unless nothing was ever written to it, in which case it is litter.
+    private func fail(_ message: String) {
+        closeHandles()
+        if download.bytesReceived == 0 {
+            (partFile ?? PartFile(folder: download.folder, name: download.name)).remove()
+            download.partPath = nil
+            download.segments = []
+        }
+        setState(.failed(message))
     }
 
     public func pause() {

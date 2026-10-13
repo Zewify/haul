@@ -171,9 +171,15 @@ struct DownloadTaskTests {
     }
 
     @Test func missingFileFails() async throws {
-        let result = await run(download("/nope"))
+        var download = download("/nope")
+        download.name = "nope.bin"
+        // The engine claims the part file at add time; a failure before any byte arrives must not leave it behind.
+        try PartFile(folder: folder, name: "nope.bin").prepare(size: nil)
+        let result = await run(download)
         guard case .failed(let message) = result.state else { Issue.record("expected failure, got \(result.state)"); return }
         #expect(message.contains("404"))
+        #expect(result.partPath == nil)
+        #expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("nope.bin.haulpart").path))
     }
 
     @Test func cancelRemovesThePartFile() async throws {
