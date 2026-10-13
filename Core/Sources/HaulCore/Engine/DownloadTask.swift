@@ -9,6 +9,20 @@ public struct DownloadProgress: Sendable, Hashable {
     public var segments: [Segment]
     public var bytesPerSecond: Double
     public var eta: TimeInterval?
+    public var mediaDone: Int?
+    public var mediaTotal: Int?
+
+    public init(state: DownloadState, bytes: Int64, total: Int64?, segments: [Segment], bytesPerSecond: Double, eta: TimeInterval?,
+                mediaDone: Int? = nil, mediaTotal: Int? = nil) {
+        self.state = state
+        self.bytes = bytes
+        self.total = total
+        self.segments = segments
+        self.bytesPerSecond = bytesPerSecond
+        self.eta = eta
+        self.mediaDone = mediaDone
+        self.mediaTotal = mediaTotal
+    }
 }
 
 /// Stops the whole download: the server said no, the disk said no, or a segment ran out of retries.

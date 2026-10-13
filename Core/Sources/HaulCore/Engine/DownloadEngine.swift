@@ -18,7 +18,7 @@ public final class DownloadEngine {
     /// Called whenever the list or a record changes, so the owner can save the library.
     @ObservationIgnored public var onChange: (() -> Void)?
 
-    @ObservationIgnored private var tasks: [UUID: DownloadTask] = [:]
+    @ObservationIgnored private var tasks: [UUID: any Pausable] = [:]
     @ObservationIgnored private var runners: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private let session: URLSession
     @ObservationIgnored private let retryDelays: [TimeInterval]
@@ -164,14 +164,25 @@ public final class DownloadEngine {
         guard let index = downloads.firstIndex(where: { $0.id == download.id }), tasks[download.id] == nil else { return }
         downloads[index].state = .probing
         let id = download.id
-        let task = DownloadTask(download: downloads[index], connections: effectiveConnections, session: session,
-                                retryDelays: retryDelays) { [weak self] progress in
+        let onProgress: @Sendable (DownloadProgress) -> Void = { [weak self] progress in
             Task { @MainActor in self?.apply(progress, to: id) }
         }
-        tasks[id] = task
-        runners[id] = Task { [weak self] in
-            let result = await task.run()
-            self?.finished(id, with: result)
+        switch downloads[index].kind {
+        case .file:
+            let task = DownloadTask(download: downloads[index], connections: effectiveConnections, session: session,
+                                    retryDelays: retryDelays, onProgress: onProgress)
+            tasks[id] = task
+            runners[id] = Task { [weak self] in
+                let result = await task.run()
+                self?.finished(id, with: result)
+            }
+        case .hls:
+            let task = HLSTask(download: downloads[index], session: session, retryDelays: retryDelays, onProgress: onProgress)
+            tasks[id] = task
+            runners[id] = Task { [weak self] in
+                let result = await task.run()
+                self?.finished(id, with: result)
+            }
         }
     }
 
@@ -179,7 +190,9 @@ public final class DownloadEngine {
         guard let index = downloads.firstIndex(where: { $0.id == id }), tasks[id] != nil else { return }
         self.progress[id] = progress
         downloads[index].segments = progress.segments
-        downloads[index].size = progress.total
+        if downloads[index].kind == .file { downloads[index].size = progress.total }
+        downloads[index].mediaDone = progress.mediaDone
+        downloads[index].mediaTotal = progress.mediaTotal
         if downloads[index].state.isRunning || progress.state.isRunning {
             downloads[index].state = progress.state
         }
@@ -201,3 +214,13 @@ public final class DownloadEngine {
         onChange?()
     }
 }
+
+
+/// What the engine needs from a running task, whichever kind it is.
+protocol Pausable: Sendable {
+    func pause() async
+    func cancel() async
+}
+
+extension DownloadTask: Pausable {}
+extension HLSTask: Pausable {}

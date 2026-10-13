@@ -92,6 +92,9 @@ public struct Download: Codable, Identifiable, Hashable, Sendable {
     public var partPath: String?
     /// The finished file.
     public var finalPath: String?
+    /// For an HLS download: segments saved and segments in the stream.
+    public var mediaDone: Int?
+    public var mediaTotal: Int?
 
     public init(id: UUID = UUID(), url: URL, kind: DownloadKind = .file, name: String, folder: URL,
                 context: RequestContext = RequestContext(), added: Date = Date()) {
@@ -109,9 +112,14 @@ public struct Download: Codable, Identifiable, Hashable, Sendable {
 
     public var bytesReceived: Int64 { segments.reduce(0) { $0 + $1.written } }
 
-    /// 0...1 while the size is known, nil otherwise.
+    /// 0...1 while the size is known (segments, for HLS), nil otherwise.
     public var fraction: Double? {
-        guard let size, size > 0 else { return state == .finished ? 1 : nil }
+        if state == .finished { return 1 }
+        if kind == .hls {
+            guard let mediaDone, let mediaTotal, mediaTotal > 0 else { return nil }
+            return min(1, Double(mediaDone) / Double(mediaTotal))
+        }
+        guard let size, size > 0 else { return nil }
         return min(1, Double(bytesReceived) / Double(size))
     }
 }

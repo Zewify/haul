@@ -127,6 +127,24 @@ struct EngineTests {
         #expect(await eventually { engine.download(queued.id)?.state == .finished })
     }
 
+    @Test func hlsDownloadsSaveOneFile() async throws {
+        let a = Data("AAAA".utf8), b = Data("BBBB".utf8)
+        server["/a.ts"] = .init(data: a)
+        server["/b.ts"] = .init(data: b)
+        server["/media.m3u8"] = .init(data: Data("#EXTM3U\n#EXTINF:4,\na.ts\n#EXTINF:4,\nb.ts\n#EXT-X-ENDLIST\n".utf8))
+        let engine = engine()
+        var request = request("/media.m3u8", name: "Clip")
+        request.kind = .hls
+        let id = engine.add(request)
+        #expect(await eventually { engine.download(id)?.state == .finished })
+        let done = try #require(engine.download(id))
+        #expect(done.finalPath?.hasSuffix("/Clip.ts") == true)
+        #expect(try Data(contentsOf: URL(fileURLWithPath: done.finalPath!)) == a + b)
+        #expect(done.mediaDone == 2)
+        #expect(done.mediaTotal == 2)
+        #expect(done.fraction == 1)
+    }
+
     @Test func changesAreReported() async throws {
         let engine = engine()
         let counter = Flag()
