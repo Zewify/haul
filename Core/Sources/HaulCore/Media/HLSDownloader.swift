@@ -36,10 +36,15 @@ public actor HLSDownloader {
             throw DownloadFailure("Cannot open the file: \(error.localizedDescription)")
         }
         defer { try? handle.close() }
-        try handle.seekToEnd()
         var done = 0
         let total = segments.count
         segmentCount = total
+        var skipping = skipping
+        if skipping > total {
+            // The stream has fewer segments than were saved: it changed, so what was saved is worthless.
+            skipping = 0
+        }
+        if skipping == 0 { try handle.truncate(atOffset: 0) } else { try handle.seekToEnd() }
         onProgress(0, total)
         if skipping == 0, let map {
             try handle.write(contentsOf: try await fetch(map))

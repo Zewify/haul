@@ -143,6 +143,25 @@ struct HLSDownloaderTests {
         #expect(try Data(contentsOf: part.url) == initData + a + b)
     }
 
+    @Test func resumeSkipsSavedSegmentsAndRestartsWhenTheCountChanged() async throws {
+        let a = Data("AAAA".utf8), b = Data("BBBB".utf8)
+        server["/a.ts"] = .init(data: a)
+        server["/b.ts"] = .init(data: b)
+        server["/media.m3u8"] = .init(data: Data("#EXTM3U\n#EXTINF:4,\na.ts\n#EXTINF:4,\nb.ts\n#EXT-X-ENDLIST\n".utf8))
+        let part = PartFile(folder: folder, name: "r.ts")
+        try part.prepare(size: nil)
+        try part.write(a, at: 0)
+        let downloader = HLSDownloader(url: server.url("/media.m3u8"), context: RequestContext(), session: .shared, partFile: part) { _, _ in }
+        _ = try await downloader.run(skipping: 1)
+        #expect(try Data(contentsOf: part.url) == a + b)
+        #expect(server.requests.filter { $0.path == "/a.ts" }.isEmpty)
+        // A skip past the end means the stream changed: start over, discarding what was there.
+        try part.write(Data("JUNK".utf8), at: 8)
+        let again = HLSDownloader(url: server.url("/media.m3u8"), context: RequestContext(), session: .shared, partFile: part) { _, _ in }
+        _ = try await again.run(skipping: 5)
+        #expect(try Data(contentsOf: part.url) == a + b)
+    }
+
     @Test func missingSegmentFails() async throws {
         server["/media.m3u8"] = .init(data: Data("#EXTM3U\n#EXTINF:4,\nmissing.ts\n#EXT-X-ENDLIST\n".utf8))
         let part = PartFile(folder: folder, name: "x.ts")
