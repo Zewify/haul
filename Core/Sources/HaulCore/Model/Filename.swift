@@ -65,12 +65,13 @@ public enum Filename {
     }
 
     /// `name.ext`, or `name 2.ext`, `name 3.ext`… — the first that neither exists nor has a part file in progress.
-    public static func available(_ name: String, in folder: URL, fileManager: FileManager = .default) -> String {
+    /// `ignoring` names files that do not count, such as a download's own part file.
+    public static func available(_ name: String, in folder: URL, ignoring: Set<String> = [], fileManager: FileManager = .default) -> String {
         let ext = (name as NSString).pathExtension
         let stem = ext.isEmpty ? name : String(name.dropLast(ext.count + 1))
         var candidate = name
         var counter = 2
-        while isTaken(candidate, in: folder, fileManager: fileManager) {
+        while isTaken(candidate, in: folder, ignoring: ignoring, fileManager: fileManager) {
             candidate = ext.isEmpty ? "\(stem) \(counter)" : "\(stem) \(counter).\(ext)"
             counter += 1
         }
@@ -79,8 +80,10 @@ public enum Filename {
 
     public static func partName(for name: String) -> String { name + "." + partExtension }
 
-    private static func isTaken(_ name: String, in folder: URL, fileManager: FileManager) -> Bool {
-        fileManager.fileExists(atPath: folder.appendingPathComponent(name).path)
-            || fileManager.fileExists(atPath: folder.appendingPathComponent(partName(for: name)).path)
+    private static func isTaken(_ name: String, in folder: URL, ignoring: Set<String>, fileManager: FileManager) -> Bool {
+        for candidate in [name, partName(for: name)] where !ignoring.contains(candidate) {
+            if fileManager.fileExists(atPath: folder.appendingPathComponent(candidate).path) { return true }
+        }
+        return false
     }
 }
