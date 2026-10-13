@@ -1,0 +1,120 @@
+name: Haul
+options:
+  bundleIdPrefix: com.zewify
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+configs:
+  Debug: debug
+  Release: release
+  # The direct edition, sold from zewify.com: the same app with the video grabber compiled in.
+  Debug-Direct: debug
+  Release-Direct: release
+packages:
+  HaulCore:
+    path: Core
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+  configs:
+    Debug-Direct:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG DIRECT_EDITION
+    Release-Direct:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DIRECT_EDITION
+targets:
+  Haul:
+    type: application
+    platform: macOS
+    configFiles:
+      Debug: App/Signing.xcconfig
+      Release: App/Signing.xcconfig
+      Debug-Direct: App/Signing.xcconfig
+      Release-Direct: App/Signing.xcconfig
+    sources:
+      - path: App/Sources
+      - path: App/Resources/Assets.xcassets
+    dependencies:
+      - package: HaulCore
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleName: Haul
+        CFBundleDisplayName: Haul
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.utilities
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSHumanReadableCopyright: © 2026 Zewify
+        # Plain http downloads are the job; ATS would refuse them.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+    entitlements:
+      path: App/Haul.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true
+        com.apple.security.files.downloads.read-write: true
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.files.bookmarks.app-scope: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zewify.haul
+        PRODUCT_NAME: Haul
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: NO
+
+  HaulTests:
+    type: bundle.unit-test
+    platform: macOS
+    configFiles:
+      Debug: App/Signing.xcconfig
+      Release: App/Signing.xcconfig
+      Debug-Direct: App/Signing.xcconfig
+      Release-Direct: App/Signing.xcconfig
+    sources:
+      - path: AppTests
+    dependencies:
+      - target: Haul
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zewify.haul.tests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Haul.app/Contents/MacOS/Haul
+        BUNDLE_LOADER: $(TEST_HOST)
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Haul:
+    build:
+      targets:
+        Haul: all
+        HaulTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - HaulTests
+    archive:
+      config: Release
+  Haul-Direct:
+    build:
+      targets:
+        Haul: all
+        HaulTests: [test]
+    run:
+      config: Debug-Direct
+    test:
+      config: Debug-Direct
+      targets:
+        - HaulTests
+    archive:
+      config: Release-Direct

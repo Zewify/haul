@@ -7,6 +7,15 @@ public struct ProbeResult: Sendable, Hashable {
     public var validator: String?
     public var suggestedName: String
     public var contentType: String?
+
+    public init(finalURL: URL, size: Int64?, acceptsRanges: Bool, validator: String?, suggestedName: String, contentType: String?) {
+        self.finalURL = finalURL
+        self.size = size
+        self.acceptsRanges = acceptsRanges
+        self.validator = validator
+        self.suggestedName = suggestedName
+        self.contentType = contentType
+    }
 }
 
 public enum ProbeError: Error, Equatable {
