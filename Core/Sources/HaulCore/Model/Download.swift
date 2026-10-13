@@ -20,8 +20,19 @@ public struct RequestContext: Codable, Hashable, Sendable {
         if let referrer { all["Referer"] = referrer }
         if let cookies, !cookies.isEmpty { all["Cookie"] = cookies }
         if let userAgent { all["User-Agent"] = userAgent }
+        all["Accept-Encoding"] = "identity"
         return all
     }
+
+    /// The headers for a request to `url`: the site's cookies only go to the site they came from, never to a
+    /// CDN a redirect led to, as a browser would do.
+    public func headers(for url: URL, original: URL) -> [String: String] {
+        var all = allHeaders
+        if Self.host(url) != Self.host(original) { all["Cookie"] = nil }
+        return all
+    }
+
+    static func host(_ url: URL) -> String { (url.host ?? "").lowercased() }
 }
 
 /// One byte range of a download, `start...end` inclusive, and how much of it has reached the disk.
@@ -92,9 +103,12 @@ public struct Download: Codable, Identifiable, Hashable, Sendable {
     public var partPath: String?
     /// The finished file.
     public var finalPath: String?
-    /// For an HLS download: segments saved and segments in the stream.
+    /// For an HLS download: segments saved, segments in the stream, and the byte the next segment goes at.
     public var mediaDone: Int?
     public var mediaTotal: Int?
+    public var mediaOffset: Int64?
+    /// A security-scoped bookmark for a folder chosen for this download alone, so the sandbox lets the app back in.
+    public var folderBookmark: Data?
 
     public init(id: UUID = UUID(), url: URL, kind: DownloadKind = .file, name: String, folder: URL,
                 context: RequestContext = RequestContext(), added: Date = Date()) {

@@ -25,14 +25,14 @@ public actor HLSTask {
         download.state = .downloading
         emit()
         let skipping = part.length > 0 ? (download.mediaDone ?? 0) : 0
-        if skipping == 0 { part.remove() }
+        let resumeOffset = download.mediaOffset ?? 0
         do {
             try part.prepare(size: nil)
             let downloader = HLSDownloader(url: download.url, context: download.context, session: session, partFile: part,
-                                           retryDelays: retryDelays) { [weak self] done, total in
-                Task { await self?.progressed(done, total, bytes: part.length) }
+                                           retryDelays: retryDelays) { [weak self] done, total, offset in
+                Task { await self?.progressed(done, total, offset: offset) }
             }
-            let task = Task { try await downloader.run(skipping: skipping) }
+            let task = Task { try await downloader.run(skipping: skipping, resumeOffset: resumeOffset) }
             running = task
             let ext = try await task.value
             running = nil
@@ -51,6 +51,7 @@ public actor HLSTask {
                 part.remove()
                 download.partPath = nil
                 download.mediaDone = nil
+                download.mediaOffset = nil
                 download.state = .cancelled
             } else {
                 download.state = .paused
@@ -76,15 +77,19 @@ public actor HLSTask {
         running?.cancel()
     }
 
-    private func progressed(_ done: Int, _ total: Int, bytes: Int64) {
+    /// `done`, `total` and `offset` arrive together, so what is saved is always a consistent pair, even if it
+    /// trails the file by a batch; the resume truncates the file back to the offset.
+    private func progressed(_ done: Int, _ total: Int, offset: Int64) {
         download.mediaDone = done
         download.mediaTotal = total
-        download.segments = [Segment(start: 0, end: Int64.max - 1, written: bytes)]
+        download.mediaOffset = offset
+        download.segments = [Segment(start: 0, end: Int64.max - 1, written: offset)]
         emit()
     }
 
     private func emit() {
         onProgress(DownloadProgress(state: download.state, bytes: download.bytesReceived, total: nil, segments: download.segments,
-                                    bytesPerSecond: 0, eta: nil, mediaDone: download.mediaDone, mediaTotal: download.mediaTotal))
+                                    bytesPerSecond: 0, eta: nil, mediaDone: download.mediaDone, mediaTotal: download.mediaTotal,
+                                    mediaOffset: download.mediaOffset))
     }
 }

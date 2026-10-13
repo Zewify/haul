@@ -87,8 +87,6 @@ async function pair() {
     await api.storage.local.set({ token: result.json.token });
     await refreshStatus();
 
-// For the end-to-end driver and debugging from the worker's console.
-globalThis.haul = { fetchStatus, pair, handOver, refreshStatus, settings };
     return { ok: true };
   }
   return { ok: false, error: (result.json && result.json.error) || `Haul answered ${result.status || 'nothing'}` };
@@ -189,8 +187,6 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case 'status': {
         const state = await refreshStatus();
 
-// For the end-to-end driver and debugging from the worker's console.
-globalThis.haul = { fetchStatus, pair, handOver, refreshStatus, settings };
         const s = await settings();
         const tabId = message.tabId;
         return { ...state, capture: s.capture, port: s.port, media: state.media, items: tabId != null ? (mediaByTab.get(tabId) || []) : [] };
@@ -201,12 +197,8 @@ globalThis.haul = { fetchStatus, pair, handOver, refreshStatus, settings };
       case 'setCapture': await api.storage.local.set({ capture: !!message.value }); return { ok: true };
       case 'setPort': await api.storage.local.set({ port: Number(message.value) || 48512 }); return refreshStatus();
 
-// For the end-to-end driver and debugging from the worker's console.
-globalThis.haul = { fetchStatus, pair, handOver, refreshStatus, settings };
       case 'disconnect': await api.storage.local.set({ token: null }); return refreshStatus();
 
-// For the end-to-end driver and debugging from the worker's console.
-globalThis.haul = { fetchStatus, pair, handOver, refreshStatus, settings };
       default: return { ok: false, error: 'Unknown message' };
     }
   })().then(sendResponse, (error) => sendResponse({ ok: false, error: String(error) }));
@@ -222,6 +214,4 @@ if (api.alarms) {
   api.alarms.onAlarm.addListener((alarm) => { if (alarm.name === STATUS_ALARM) refreshStatus(); });
 }
 refreshStatus();
-
-// For the end-to-end driver and debugging from the worker's console.
 globalThis.haul = { fetchStatus, pair, handOver, refreshStatus, settings };

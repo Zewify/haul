@@ -63,6 +63,23 @@ struct ProbeTests {
         #expect(headers["x-extra"] == "yes")
     }
 
+    @Test func asksForIdentityEncoding() async throws {
+        _ = try await Probe.run(server.url("/blob.bin"), context: RequestContext(), session: .shared)
+        #expect(server.requests.last?.headers["accept-encoding"] == "identity")
+    }
+
+    @Test func cookiesDoNotFollowARedirectToAnotherHost() async throws {
+        let elsewhere = URL(string: "http://localhost:\(server.port)/blob.bin")!
+        server["/away"] = TestServer.Resource(data: Data(), headers: ["Location": elsewhere.absoluteString], status: 302)
+        let context = RequestContext(referrer: "https://ref.example/", cookies: "s=1", userAgent: "UA")
+        let result = try await Probe.run(server.url("/away"), context: context, session: .shared)
+        #expect(result.finalURL.host == "localhost")
+        let redirected = try #require(server.requests.last)
+        #expect(redirected.path == "/blob.bin")
+        #expect(redirected.headers["cookie"] == nil)
+        #expect(redirected.headers["user-agent"] == "UA")
+    }
+
     @Test func missingFileThrows() async {
         await #expect(throws: ProbeError.self) {
             try await Probe.run(server.url("/nope"), context: RequestContext(), session: .shared)

@@ -64,7 +64,8 @@ struct MainWindow: View {
         .sheet(isPresented: $showingAdd) { AddURLSheet().environment(model) }
         .safeAreaInset(edge: .bottom) { StatusBar() }
         .onDeleteCommand {
-            if let selection { model.engine.remove(selection, deleteFile: false) }
+            // Only a download that is over; an active or paused one keeps its progress.
+            if let selection { model.engine.removeIfDone(selection) }
         }
     }
 

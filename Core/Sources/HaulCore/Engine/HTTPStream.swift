@@ -9,14 +9,17 @@ final class HTTPStream: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     }
 
     private let continuation: AsyncThrowingStream<Event, Error>.Continuation
+    private let original: URL
 
-    private init(_ continuation: AsyncThrowingStream<Event, Error>.Continuation) {
+    private init(_ continuation: AsyncThrowingStream<Event, Error>.Continuation, original: URL) {
         self.continuation = continuation
+        self.original = original
     }
 
-    static func open(_ request: URLRequest, session: URLSession) -> AsyncThrowingStream<Event, Error> {
+    /// `original` is the URL the user gave: cookies are dropped on a redirect away from its host.
+    static func open(_ request: URLRequest, session: URLSession, original: URL) -> AsyncThrowingStream<Event, Error> {
         AsyncThrowingStream { continuation in
-            let delegate = HTTPStream(continuation)
+            let delegate = HTTPStream(continuation, original: original)
             let task = session.dataTask(with: request)
             task.delegate = delegate
             continuation.onTermination = { _ in task.cancel() }
@@ -33,6 +36,11 @@ final class HTTPStream: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         }
         continuation.yield(.response(http))
         completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(Redirects.scrub(request, original: original))
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {

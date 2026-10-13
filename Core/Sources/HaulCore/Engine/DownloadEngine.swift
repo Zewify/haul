@@ -75,18 +75,46 @@ public final class DownloadEngine {
     @discardableResult
     public func add(_ request: Download) -> UUID {
         var download = request
-        download.folder = request.folder
-        download.name = Filename.available(Filename.sanitised(download.name), in: download.folder)
+        Self.resolveFolder(&download)
+        download.name = Filename.sanitised(download.name)
         download.state = .queued
         download.segments = []
         download.finalPath = nil
-        let part = PartFile(folder: download.folder, name: download.name)
-        try? part.prepare(size: nil)
-        download.partPath = part.url.path
+        download.partPath = nil
+        claimName(&download)
         downloads.append(download)
         changed()
         pump()
         return download.id
+    }
+
+    /// Makes the name unique in its folder and creates its empty part file, so no other download can take it.
+    private func claimName(_ download: inout Download) {
+        download.name = Filename.available(download.name, in: download.folder)
+        let part = PartFile(folder: download.folder, name: download.name)
+        try? part.prepare(size: nil)
+        download.partPath = part.url.path
+    }
+
+    /// A folder chosen for this download alone comes with a security-scoped bookmark; the sandbox only lets the app
+    /// in through it, so it is resolved before any path is used. Access is kept for the app's lifetime.
+    static func resolveFolder(_ download: inout Download) {
+        guard let data = download.folderBookmark else { return }
+        var stale = false
+        if let url = try? URL(resolvingBookmarkData: data, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &stale) {
+            _ = url.startAccessingSecurityScopedResource()
+            download.folder = url
+            if stale, let fresh = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
+                download.folderBookmark = fresh
+            }
+        }
+    }
+
+    /// Removes a download that is over (finished, failed or cancelled); an active or paused one is left alone,
+    /// so a stray Delete key never destroys progress.
+    public func removeIfDone(_ id: UUID) {
+        guard let download = download(id), !download.state.isActive, download.state != .paused else { return }
+        remove(id, deleteFile: false)
     }
 
     public func remove(_ id: UUID, deleteFile: Bool) {
@@ -122,6 +150,11 @@ public final class DownloadEngine {
     public func resume(_ id: UUID) {
         guard let index = downloads.firstIndex(where: { $0.id == id }), !downloads[index].state.isActive,
               downloads[index].state != .finished else { return }
+        // A download that failed or was cancelled gave its part file up; another download may hold the name now.
+        if downloads[index].partPath == nil {
+            Self.resolveFolder(&downloads[index])
+            claimName(&downloads[index])
+        }
         downloads[index].state = .queued
         changed()
         pump()
@@ -162,6 +195,7 @@ public final class DownloadEngine {
 
     private func start(_ download: Download) {
         guard let index = downloads.firstIndex(where: { $0.id == download.id }), tasks[download.id] == nil else { return }
+        Self.resolveFolder(&downloads[index])
         downloads[index].state = .probing
         let id = download.id
         let onProgress: @Sendable (DownloadProgress) -> Void = { [weak self] progress in
@@ -193,6 +227,7 @@ public final class DownloadEngine {
         if downloads[index].kind == .file { downloads[index].size = progress.total }
         downloads[index].mediaDone = progress.mediaDone
         downloads[index].mediaTotal = progress.mediaTotal
+        downloads[index].mediaOffset = progress.mediaOffset
         if downloads[index].state.isRunning || progress.state.isRunning {
             downloads[index].state = progress.state
         }

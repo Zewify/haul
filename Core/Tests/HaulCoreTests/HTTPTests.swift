@@ -19,6 +19,12 @@ struct HTTPTests {
         #expect(HTTPRequest.parse(Data("GET /sta".utf8)) == nil)
     }
 
+    @Test func badContentLengthsAreRejectedNotCrashed() {
+        #expect(HTTPRequest.parse(Data("POST /x HTTP/1.1\r\nContent-Length: -5\r\n\r\n".utf8)) == nil)
+        #expect(HTTPRequest.parse(Data("POST /x HTTP/1.1\r\nContent-Length: abc\r\n\r\n".utf8)) == nil)
+        #expect(HTTPRequest.parse(Data("POST /x HTTP/1.1\r\nContent-Length: 99999999999999\r\n\r\n".utf8)) == nil)
+    }
+
     @Test func getWithoutBodyAndQueryStripped() throws {
         let (request, _) = try #require(HTTPRequest.parse(Data("GET /status?x=1 HTTP/1.1\r\n\r\n".utf8)))
         #expect(request.path == "/status")

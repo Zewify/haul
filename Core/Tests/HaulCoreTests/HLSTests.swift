@@ -120,7 +120,7 @@ struct HLSDownloaderTests {
         let part = PartFile(folder: folder, name: "video.ts")
         try part.prepare(size: nil)
         let counter = ProgressCounter()
-        let downloader = HLSDownloader(url: server.url("/master.m3u8"), context: RequestContext(), session: .shared, partFile: part, parallel: 2) { done, total in
+        let downloader = HLSDownloader(url: server.url("/master.m3u8"), context: RequestContext(), session: .shared, partFile: part, parallel: 2) { done, total, _ in
             counter.record(done, total)
         }
         let ext = try await downloader.run()
@@ -138,7 +138,7 @@ struct HLSDownloaderTests {
         server["/media.m3u8"] = .init(data: Data(media.utf8))
         let part = PartFile(folder: folder, name: "video")
         try part.prepare(size: nil)
-        let downloader = HLSDownloader(url: server.url("/media.m3u8"), context: RequestContext(), session: .shared, partFile: part) { _, _ in }
+        let downloader = HLSDownloader(url: server.url("/media.m3u8"), context: RequestContext(), session: .shared, partFile: part) { _, _, _ in }
         #expect(try await downloader.run() == "mp4")
         #expect(try Data(contentsOf: part.url) == initData + a + b)
     }
@@ -151,14 +151,31 @@ struct HLSDownloaderTests {
         let part = PartFile(folder: folder, name: "r.ts")
         try part.prepare(size: nil)
         try part.write(a, at: 0)
-        let downloader = HLSDownloader(url: server.url("/media.m3u8"), context: RequestContext(), session: .shared, partFile: part) { _, _ in }
-        _ = try await downloader.run(skipping: 1)
+        let offsets = ProgressCounter()
+        let downloader = HLSDownloader(url: server.url("/media.m3u8"), context: RequestContext(), session: .shared, partFile: part) { done, total, bytes in
+            offsets.record(done, total); offsets.recordBytes(bytes)
+        }
+        _ = try await downloader.run(skipping: 1, resumeOffset: 4)
         #expect(try Data(contentsOf: part.url) == a + b)
+        #expect(offsets.bytes == 8)
         #expect(server.requests.filter { $0.path == "/a.ts" }.isEmpty)
         // A skip past the end means the stream changed: start over, discarding what was there.
         try part.write(Data("JUNK".utf8), at: 8)
-        let again = HLSDownloader(url: server.url("/media.m3u8"), context: RequestContext(), session: .shared, partFile: part) { _, _ in }
-        _ = try await again.run(skipping: 5)
+        let again = HLSDownloader(url: server.url("/media.m3u8"), context: RequestContext(), session: .shared, partFile: part) { _, _, _ in }
+        _ = try await again.run(skipping: 5, resumeOffset: 12)
+        #expect(try Data(contentsOf: part.url) == a + b)
+    }
+
+    @Test func resumeTruncatesAPartialSegmentLeftByACrash() async throws {
+        let a = Data("AAAA".utf8), b = Data("BBBB".utf8)
+        server["/a.ts"] = .init(data: a)
+        server["/b.ts"] = .init(data: b)
+        server["/media.m3u8"] = .init(data: Data("#EXTM3U\n#EXTINF:4,\na.ts\n#EXTINF:4,\nb.ts\n#EXT-X-ENDLIST\n".utf8))
+        let part = PartFile(folder: folder, name: "crash.ts")
+        try part.prepare(size: nil)
+        try part.write(a + Data("BB".utf8), at: 0)   // the second segment was half written when the app died
+        let downloader = HLSDownloader(url: server.url("/media.m3u8"), context: RequestContext(), session: .shared, partFile: part) { _, _, _ in }
+        _ = try await downloader.run(skipping: 1, resumeOffset: 4)
         #expect(try Data(contentsOf: part.url) == a + b)
     }
 
@@ -166,7 +183,7 @@ struct HLSDownloaderTests {
         server["/media.m3u8"] = .init(data: Data("#EXTM3U\n#EXTINF:4,\nmissing.ts\n#EXT-X-ENDLIST\n".utf8))
         let part = PartFile(folder: folder, name: "x.ts")
         try part.prepare(size: nil)
-        let downloader = HLSDownloader(url: server.url("/media.m3u8"), context: RequestContext(), session: .shared, partFile: part, retryDelays: [0.01]) { _, _ in }
+        let downloader = HLSDownloader(url: server.url("/media.m3u8"), context: RequestContext(), session: .shared, partFile: part, retryDelays: [0.01]) { _, _, _ in }
         await #expect(throws: DownloadFailure.self) { try await downloader.run() }
     }
 }
@@ -174,6 +191,9 @@ struct HLSDownloaderTests {
 final class ProgressCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var _last: (Int, Int) = (0, 0)
+    private var _bytes: Int64 = 0
     func record(_ done: Int, _ total: Int) { lock.withLock { _last = (done, total) } }
+    func recordBytes(_ bytes: Int64) { lock.withLock { _bytes = bytes } }
     var last: (Int, Int) { lock.withLock { _last } }
+    var bytes: Int64 { lock.withLock { _bytes } }
 }

@@ -11,9 +11,10 @@ public struct DownloadProgress: Sendable, Hashable {
     public var eta: TimeInterval?
     public var mediaDone: Int?
     public var mediaTotal: Int?
+    public var mediaOffset: Int64?
 
     public init(state: DownloadState, bytes: Int64, total: Int64?, segments: [Segment], bytesPerSecond: Double, eta: TimeInterval?,
-                mediaDone: Int? = nil, mediaTotal: Int? = nil) {
+                mediaDone: Int? = nil, mediaTotal: Int? = nil, mediaOffset: Int64? = nil) {
         self.state = state
         self.bytes = bytes
         self.total = total
@@ -22,6 +23,7 @@ public struct DownloadProgress: Sendable, Hashable {
         self.eta = eta
         self.mediaDone = mediaDone
         self.mediaTotal = mediaTotal
+        self.mediaOffset = mediaOffset
     }
 }
 
@@ -76,34 +78,23 @@ public actor DownloadTask {
     // MARK: Control
 
     /// Runs until the download is finished, paused, cancelled or failed, and returns the record to store.
+    /// The whole run, probe included, is one cancellable task, so a pause or cancel lands at any point.
     public func run() async -> Download {
+        let work = Task { try await self.work() }
+        fetching = work
+        defer { fetching = nil }
         do {
-            try await probeAndPlan()
-            var restarted = false
-            while true {
-                do {
-                    try await fetchAll()
-                    break
-                } catch SegmentError.restart(let reason) where !restarted {
-                    log.notice("restarting \(self.download.name, privacy: .public): \(reason, privacy: .public)")
-                    restarted = true
-                    download.segments = []
-                    partFile?.remove()
-                    try await probeAndPlan()
-                } catch SegmentError.restart(let reason) {
-                    throw DownloadFailure("The file keeps changing on the server (\(reason)).")
-                }
-            }
+            try await work.value
             closeHandles()
             let final = try partFile!.finish()
             download.finalPath = final.path
             download.partPath = nil
             download.finished = Date()
             setState(.finished)
-        } catch is CancellationError {
+        } catch where paused || cancelled || error is CancellationError {
             closeHandles()
             if cancelled {
-                partFile?.remove()
+                (partFile ?? PartFile(folder: download.folder, name: download.name)).remove()
                 download.partPath = nil
                 download.segments = download.resumable ? download.segments : []
                 setState(.cancelled)
@@ -132,6 +123,31 @@ public actor DownloadTask {
             download.segments = []
         }
         setState(.failed(message))
+    }
+
+    private func work() async throws {
+        try await probeAndPlan()
+        try checkControls()
+        var restarted = false
+        while true {
+            do {
+                try await fetchLoop()
+                break
+            } catch SegmentError.restart(let reason) where !restarted {
+                log.notice("restarting \(self.download.name, privacy: .public): \(reason, privacy: .public)")
+                restarted = true
+                download.segments = []
+                try await probeAndPlan()
+                try checkControls()
+            } catch SegmentError.restart(let reason) {
+                throw DownloadFailure("The file keeps changing on the server (\(reason)).")
+            }
+        }
+    }
+
+    /// A pause or cancel that arrived while a request could not be interrupted.
+    private func checkControls() throws {
+        if paused || cancelled { throw CancellationError() }
     }
 
     public func pause() {
@@ -169,7 +185,8 @@ public actor DownloadTask {
                 download.segments[index].written = min(download.segments[index].written, download.segments[index].length)
             }
         } else {
-            part.remove()
+            // Emptied in place, never deleted: the name was claimed at add time and another download may be waiting on it.
+            do { try part.truncate() } catch { throw DownloadFailure("Cannot write to \(download.folder.lastPathComponent): \(error.localizedDescription)") }
             if resumable, let size = probe.size {
                 download.segments = SegmentPlanner.plan(size: size, connections: connections)
             } else {
@@ -186,13 +203,6 @@ public actor DownloadTask {
     }
 
     // MARK: Fetching
-
-    private func fetchAll() async throws {
-        let task = Task { try await self.fetchLoop() }
-        fetching = task
-        defer { fetching = nil }
-        try await task.value
-    }
 
     /// Keeps `connections` segments in flight; when one finishes and another has a long tail, splits that tail.
     private func fetchLoop() async throws {
@@ -247,7 +257,7 @@ public actor DownloadTask {
         if segment.isComplete { return }
         var request = URLRequest(url: finalURL)
         request.timeoutInterval = 30
-        for (key, value) in download.context.allHeaders { request.setValue(value, forHTTPHeaderField: key) }
+        for (key, value) in download.context.headers(for: finalURL, original: download.url) { request.setValue(value, forHTTPHeaderField: key) }
         if download.resumable {
             request.setValue("bytes=\(segment.position)-\(segment.end)", forHTTPHeaderField: "Range")
         }
@@ -262,7 +272,7 @@ public actor DownloadTask {
 
         var sawResponse = false
         do {
-            for try await event in HTTPStream.open(request, session: session) {
+            for try await event in HTTPStream.open(request, session: session, original: download.url) {
                 switch event {
                 case .response(let response):
                     sawResponse = true

@@ -31,6 +31,8 @@ final class TestServer: @unchecked Sendable {
     private var dropsSoFar = 0
     /// Milliseconds to wait between 64 KiB chunks, to make downloads observable mid-flight.
     var chunkDelayMs: Int = 0
+    /// Milliseconds to wait before answering at all, to make the probe phase observable.
+    var responseDelayMs: Int = 0
 
     private let listener: NWListener
     private let queue = DispatchQueue(label: "test-server")
@@ -80,7 +82,12 @@ final class TestServer: @unchecked Sendable {
             var buffer = buffer
             if let data { buffer.append(data) }
             if let request = Self.parse(buffer) {
-                self.respond(to: request, on: connection)
+                let delay = self.responseDelayMs
+                if delay > 0 {
+                    self.queue.asyncAfter(deadline: .now() + .milliseconds(delay)) { self.respond(to: request, on: connection) }
+                } else {
+                    self.respond(to: request, on: connection)
+                }
             } else if error == nil, data != nil {
                 self.receive(connection, buffer: buffer)
             } else {

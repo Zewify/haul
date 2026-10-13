@@ -10,13 +10,14 @@ public actor HLSDownloader {
     private let partFile: PartFile
     private let parallel: Int
     private let retryDelays: [TimeInterval]
-    private let onProgress: @Sendable (Int, Int) -> Void
+    /// Segments done, segments in all, and the byte offset the file is complete up to.
+    private let onProgress: @Sendable (Int, Int, Int64) -> Void
     private var keys: [URL: Data] = [:]
     /// How many segments the stream has, once the playlist is read.
     public private(set) var segmentCount = 0
 
     public init(url: URL, context: RequestContext, session: URLSession, partFile: PartFile, parallel: Int = 4,
-                retryDelays: [TimeInterval] = DownloadTask.defaultRetryDelays, onProgress: @escaping @Sendable (Int, Int) -> Void) {
+                retryDelays: [TimeInterval] = DownloadTask.defaultRetryDelays, onProgress: @escaping @Sendable (Int, Int, Int64) -> Void) {
         self.url = url
         self.context = context
         self.session = session
@@ -26,8 +27,9 @@ public actor HLSDownloader {
         self.onProgress = onProgress
     }
 
-    /// `skipping` segments already in the part file lets a paused download carry on.
-    public func run(skipping: Int = 0) async throws -> String {
+    /// `skipping` segments already in the part file lets a paused download carry on; `resumeOffset` is the byte
+    /// those segments end at, and anything past it (a segment half written when the app died) is cut off.
+    public func run(skipping: Int = 0, resumeOffset: Int64 = 0) async throws -> String {
         let (segments, map) = try await resolve()
         let handle: FileHandle
         do {
@@ -40,14 +42,18 @@ public actor HLSDownloader {
         let total = segments.count
         segmentCount = total
         var skipping = skipping
-        if skipping > total {
-            // The stream has fewer segments than were saved: it changed, so what was saved is worthless.
+        if skipping > total || resumeOffset <= 0 {
+            // The stream has fewer segments than were saved, or nothing reliable was saved: start over.
             skipping = 0
         }
-        if skipping == 0 { try handle.truncate(atOffset: 0) } else { try handle.seekToEnd() }
-        onProgress(0, total)
+        var offset: Int64 = skipping == 0 ? 0 : resumeOffset
+        try handle.truncate(atOffset: UInt64(offset))
+        try handle.seekToEnd()
+        onProgress(skipping, total, offset)
         if skipping == 0, let map {
-            try handle.write(contentsOf: try await fetch(map))
+            let initData = try await fetch(map)
+            try handle.write(contentsOf: initData)
+            offset += Int64(initData.count)
         }
         var index = skipping
         done = skipping
@@ -63,10 +69,11 @@ public actor HLSDownloader {
             }
             for data in datas {
                 do { try handle.write(contentsOf: data) } catch { throw DownloadFailure("Writing failed: \(error.localizedDescription)") }
+                offset += Int64(data.count)
             }
             index += batch.count
             done += batch.count
-            onProgress(done, total)
+            onProgress(done, total, offset)
         }
         let fragmented = map != nil || segments.contains { ["m4s", "mp4"].contains($0.uri.pathExtension.lowercased()) }
         return fragmented ? "mp4" : "ts"

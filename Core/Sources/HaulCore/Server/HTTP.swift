@@ -2,6 +2,9 @@ import Foundation
 
 /// Just enough HTTP/1.1 for small JSON requests from a browser extension on the same machine.
 public struct HTTPRequest: Sendable, Hashable {
+    /// Requests are small JSON; anything larger is not from the extension.
+    public static let maxBodyLength = 1 << 20
+
     public var method: String
     /// The path without its query string.
     public var path: String
@@ -21,7 +24,7 @@ public struct HTTPRequest: Sendable, Hashable {
             guard let colon = line.firstIndex(of: ":") else { continue }
             headers[line[..<colon].lowercased()] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
         }
-        let length = Int(headers["content-length"] ?? "0") ?? 0
+        guard let length = Int(headers["content-length"] ?? "0"), length >= 0, length <= maxBodyLength else { return nil }
         let bodyStart = headerEnd.upperBound
         guard buffer.endIndex - bodyStart >= length else { return nil }
         let body = buffer.subdata(in: bodyStart..<(bodyStart + length))

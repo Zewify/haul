@@ -145,6 +145,80 @@ struct EngineTests {
         #expect(done.fraction == 1)
     }
 
+    @Test func pauseAndCancelWhileProbingAreHonoured() async throws {
+        server.responseDelayMs = 400
+        let engine = engine()
+        let a = engine.add(request("/a.bin"))
+        let b = engine.add(request("/b.bin"))
+        #expect(engine.download(a)?.state == .probing)
+        engine.pause(a)
+        engine.cancel(b)
+        #expect(await eventually { engine.download(a)?.state == .paused && engine.download(b)?.state == .cancelled })
+        try? await Task.sleep(for: .seconds(1))
+        #expect(engine.download(a)?.state == .paused)
+        #expect(engine.download(b)?.state == .cancelled)
+        #expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("a.bin").path))
+        #expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("b.bin.haulpart").path))
+    }
+
+    @Test func removeWhileProbingDoesNotLeaveAnOrphanFile() async throws {
+        server.responseDelayMs = 400
+        let engine = engine()
+        let a = engine.add(request("/a.bin"))
+        engine.remove(a, deleteFile: true)
+        try? await Task.sleep(for: .seconds(1.5))
+        #expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("a.bin").path))
+        #expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("a.bin.haulpart").path))
+    }
+
+    @Test func retryingAFailedDownloadNeverTouchesAnotherDownloadsPart() async throws {
+        let engine = engine()
+        let failed = engine.add(request("/nope", name: "same.bin"))
+        #expect(await eventually { if case .failed = engine.download(failed)?.state { true } else { false } })
+        server.chunkDelayMs = 15
+        let working = engine.add(request("/a.bin", name: "same.bin"))
+        #expect(engine.download(working)?.name == "same.bin")
+        #expect(await eventually { (engine.progress(for: working)?.bytes ?? 0) > 0 })
+        server["/nope"] = TestServer.Resource(data: blob)
+        engine.retry(failed)
+        server.chunkDelayMs = 0
+        #expect(await eventually { engine.downloads.allSatisfy { $0.state == .finished } })
+        let w = try #require(engine.download(working))
+        #expect(w.finalPath?.hasSuffix("/same.bin") == true)
+        #expect(try Data(contentsOf: URL(fileURLWithPath: w.finalPath!)) == blob)
+        #expect(engine.download(failed)?.finalPath?.hasSuffix("/same 2.bin") == true)
+    }
+
+    @Test func aFolderBookmarkIsResolvedBeforeAnythingIsWritten() async throws {
+        let real = folder.appendingPathComponent("chosen", isDirectory: true)
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        var download = request("/a.bin")
+        download.folder = URL(fileURLWithPath: "/nonexistent/stale/path")
+        download.folderBookmark = try real.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+        let engine = engine()
+        let id = engine.add(download)
+        #expect(engine.download(id)?.folder.standardizedFileURL == real.standardizedFileURL)
+        #expect(await eventually { engine.download(id)?.state == .finished })
+        #expect(FileManager.default.fileExists(atPath: real.appendingPathComponent("a.bin").path))
+    }
+
+    @Test func removeIfDoneLeavesActiveAndPausedDownloadsAlone() async throws {
+        server.chunkDelayMs = 15
+        let engine = engine()
+        let a = engine.add(request("/a.bin"))
+        engine.removeIfDone(a)
+        #expect(engine.download(a) != nil)
+        engine.pause(a)
+        #expect(await eventually { engine.download(a)?.state == .paused })
+        engine.removeIfDone(a)
+        #expect(engine.download(a) != nil)
+        server.chunkDelayMs = 0
+        engine.resume(a)
+        #expect(await eventually { engine.download(a)?.state == .finished })
+        engine.removeIfDone(a)
+        #expect(engine.download(a) == nil)
+    }
+
     @Test func changesAreReported() async throws {
         let engine = engine()
         let counter = Flag()

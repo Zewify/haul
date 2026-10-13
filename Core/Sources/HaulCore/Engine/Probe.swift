@@ -30,7 +30,7 @@ public enum Probe {
         var request = URLRequest(url: url)
         request.setValue("bytes=0-0", forHTTPHeaderField: "Range")
         for (key, value) in context.allHeaders { request.setValue(value, forHTTPHeaderField: key) }
-        let response = try await HeadersOnly.fetch(request, session: session)
+        let response = try await HeadersOnly.fetch(request, session: session, original: url)
         guard let http = response as? HTTPURLResponse else { throw ProbeError.notHTTP }
         guard (200...299).contains(http.statusCode) else { throw ProbeError.status(http.statusCode) }
         let finalURL = http.url ?? url
@@ -53,21 +53,33 @@ public enum Probe {
     }
 }
 
-/// Runs a data task only until its response headers arrive, then cancels it.
+/// Runs a data task only until its response headers arrive, then cancels it. Cancelling the Swift task cancels it too.
 final class HeadersOnly: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private var continuation: CheckedContinuation<URLResponse, Error>?
     private let lock = NSLock()
+    private var task: URLSessionDataTask?
+    private let original: URL
 
-    static func fetch(_ request: URLRequest, session: URLSession) async throws -> URLResponse {
-        let delegate = HeadersOnly()
+    private init(original: URL) { self.original = original }
+
+    static func fetch(_ request: URLRequest, session: URLSession, original: URL) async throws -> URLResponse {
+        let delegate = HeadersOnly(original: original)
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 delegate.continuation = continuation
                 let task = session.dataTask(with: request)
                 task.delegate = delegate
+                delegate.lock.withLock { delegate.task = task }
                 task.resume()
             }
-        } onCancel: {}
+        } onCancel: {
+            delegate.lock.withLock { delegate.task }?.cancel()
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(Redirects.scrub(request, original: original))
     }
 
     private func finish(_ result: Result<URLResponse, Error>) {
@@ -87,5 +99,16 @@ final class HeadersOnly: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         // Reached only when the task failed before any response; a cancelled task after headers already finished.
         finish(.failure(error ?? URLError(.unknown)))
+    }
+}
+
+
+enum Redirects {
+    /// A redirect to another host must not carry the site's cookies along, as a browser would not.
+    static func scrub(_ request: URLRequest, original: URL) -> URLRequest {
+        guard let url = request.url, RequestContext.host(url) != RequestContext.host(original) else { return request }
+        var scrubbed = request
+        scrubbed.setValue(nil, forHTTPHeaderField: "Cookie")
+        return scrubbed
     }
 }

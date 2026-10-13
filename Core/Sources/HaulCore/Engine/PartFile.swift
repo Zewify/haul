@@ -29,6 +29,18 @@ public final class PartFile: Sendable {
         try handle.truncate(atOffset: UInt64(size))
     }
 
+    /// Empties the file in place (creating it if needed), so a restart never deletes a name another download owns.
+    public func truncate(to length: Int64 = 0) throws {
+        if !FileManager.default.fileExists(atPath: url.path) {
+            guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
+                throw CocoaError(.fileWriteNoPermission, userInfo: [NSFilePathErrorKey: url.path])
+            }
+        }
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+        try handle.truncate(atOffset: UInt64(max(0, length)))
+    }
+
     public var length: Int64 {
         (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
     }

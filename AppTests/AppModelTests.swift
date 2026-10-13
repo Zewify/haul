@@ -42,20 +42,47 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.settings.pairedClients.count, 1)
     }
 
-    func testIncomingDownloadWaitsInThePanelWhenAskingIsOn() async throws {
+    func testAnUnreachableFileIsRefusedSoTheBrowserKeepsItsOwnDownload() async throws {
         let model = AppModel(store: store)
         let server = ExtensionServer(port: 0, token: "t", status: ServerStatus(version: "0", edition: .store, features: .init(media: false)), delegate: model)
+        let incoming = IncomingDownload(url: "http://127.0.0.1:1/nothing.zip", filename: "nothing.zip")
+        do {
+            _ = try await model.server(server, receive: incoming, media: false)
+            XCTFail("expected a refusal")
+        } catch ServerError.badRequest {
+            // The extension then leaves the browser's download alone.
+        }
+        XCTAssertTrue(model.pending.isEmpty)
+        XCTAssertTrue(model.engine.downloads.isEmpty)
+    }
+
+    func testAStreamWaitsInThePanelWhenAskingIsOn() async throws {
+        UserDefaults.standard.set(true, forKey: "HaulForcePro")
+        defer { UserDefaults.standard.removeObject(forKey: "HaulForcePro") }
+        let model = AppModel(store: store)
+        guard model.gate.allows(.mediaGrabber) else { throw XCTSkip("the store edition has no grabber") }
+        let server = ExtensionServer(port: 0, token: "t", status: ServerStatus(version: "0", edition: .direct, features: .init(media: true)), delegate: model)
         let shown = expectation(description: "panel asked")
         model.onPending = { shown.fulfill() }
-        let incoming = IncomingDownload(url: "http://127.0.0.1:1/nothing.zip", filename: "nothing.zip")
-        _ = try await model.server(server, receive: incoming, media: false)
+        _ = try await model.server(server, receive: IncomingDownload(url: "https://x/y.m3u8", kind: "hls", pageTitle: "A Clip"), media: true)
         await fulfillment(of: [shown], timeout: 5)
-        XCTAssertEqual(model.pending.count, 1)
-        XCTAssertEqual(model.pending.first?.name, "nothing.zip")
-        XCTAssertNotNil(model.pending.first?.error, "an unreachable server is reported, not hidden")
-        XCTAssertTrue(model.engine.downloads.isEmpty)
+        XCTAssertEqual(model.pending.first?.name, "A Clip")
         model.dismissCatch(model.pending.first!)
         XCTAssertTrue(model.pending.isEmpty)
+    }
+
+    func testACatchToAChosenFolderCarriesABookmark() throws {
+        let model = AppModel(store: store)
+        let chosen = folder.appendingPathComponent("chosen", isDirectory: true)
+        try FileManager.default.createDirectory(at: chosen, withIntermediateDirectories: true)
+        let pending = PendingCatch(incoming: IncomingDownload(url: "https://x/a.zip"), media: false, name: "a.zip", folder: chosen)
+        model.startCatch(pending)
+        let download = try XCTUnwrap(model.engine.downloads.first)
+        XCTAssertNotNil(download.folderBookmark)
+        XCTAssertEqual(download.folder.standardizedFileURL, chosen.standardizedFileURL)
+        let other = PendingCatch(incoming: IncomingDownload(url: "https://x/b.zip"), media: false, name: "b.zip", folder: model.folder)
+        model.startCatch(other)
+        XCTAssertNil(model.engine.downloads.last?.folderBookmark, "the global folder has the app's own bookmark")
     }
 
     func testMediaNeedsPro() async throws {

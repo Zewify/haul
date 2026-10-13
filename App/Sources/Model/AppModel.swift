@@ -259,6 +259,10 @@ final class AppModel {
     func startCatch(_ pending: PendingCatch) {
         self.pending.removeAll { $0.id == pending.id }
         var download = Download(url: URL(string: pending.incoming.url)!, kind: pending.kind, name: pending.name, folder: pending.folder, context: pending.context)
+        if pending.folder.standardizedFileURL != folder.standardizedFileURL {
+            // A folder chosen for this download alone: the sandbox only lets the app back in through a bookmark.
+            download.folderBookmark = try? pending.folder.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+        }
         if let probe = pending.probe {
             download.finalURL = probe.finalURL
             download.size = probe.size
@@ -352,7 +356,11 @@ extension AppModel: ExtensionServerDelegate {
             throw ServerError.badRequest("Grabbing video needs Haul Pro.")
         }
         let pending = await makeCatch(download, media: media)
-        if settings.askBeforeStarting || pending.error != nil {
+        if let error = pending.error {
+            // Refused, so the browser keeps its own download rather than ending up with neither.
+            throw ServerError.badRequest("Haul could not reach the file: \(error)")
+        }
+        if settings.askBeforeStarting {
             self.pending.append(pending)
             onPending?()
             return pending.id

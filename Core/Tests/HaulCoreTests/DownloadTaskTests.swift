@@ -194,6 +194,19 @@ struct DownloadTaskTests {
         #expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("blob.bin.haulpart").path))
     }
 
+    @Test func segmentsAskForIdentityAndKeepCookiesOnTheOriginalHostOnly() async throws {
+        let elsewhere = URL(string: "http://localhost:\(server.port)/blob.bin")!
+        server["/away"] = TestServer.Resource(data: Data(), headers: ["Location": elsewhere.absoluteString], status: 302)
+        var download = download("/away")
+        download.context = RequestContext(cookies: "sid=abc", userAgent: "HaulTest")
+        let result = await run(download)
+        #expect(result.state == .finished)
+        #expect(try fileMatches(result))
+        let fetches = server.requests.filter { $0.path == "/blob.bin" }
+        #expect(fetches.count >= 4)
+        #expect(fetches.allSatisfy { $0.headers["cookie"] == nil && $0.headers["accept-encoding"] == "identity" && $0.headers["user-agent"] == "HaulTest" })
+    }
+
     @Test func contextHeadersReachEverySegment() async throws {
         var download = download()
         download.context = RequestContext(cookies: "sid=abc", userAgent: "HaulTest")
