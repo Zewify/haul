@@ -41,6 +41,7 @@ targets:
       - path: App/Resources/Assets.xcassets
     dependencies:
       - package: HaulCore
+      - target: HaulSafari
     info:
       path: App/Info.plist
       properties:
@@ -71,6 +72,68 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_HARDENED_RUNTIME: YES
         GENERATE_INFOPLIST_FILE: NO
+
+  # The Safari Web Extension: the shared extension files, packaged inside the app.
+  HaulSafari:
+    type: app-extension
+    platform: macOS
+    configFiles:
+      Debug: App/Signing.xcconfig
+      Release: App/Signing.xcconfig
+      Debug-Direct: App/Signing.xcconfig
+      Release-Direct: App/Signing.xcconfig
+    sources:
+      - path: SafariExtension/SafariWebExtensionHandler.swift
+      - path: Extension/manifest.json
+        buildPhase: resources
+      - path: Extension/background.js
+        buildPhase: resources
+      - path: Extension/content.js
+        buildPhase: resources
+      - path: Extension/popup.html
+        buildPhase: resources
+      - path: Extension/popup.js
+        buildPhase: resources
+      - path: Extension/options.html
+        buildPhase: resources
+      - path: Extension/options.js
+        buildPhase: resources
+      - path: Extension/lib
+        type: folder
+        buildPhase: resources
+      - path: Extension/icons
+        type: folder
+        buildPhase: resources
+    info:
+      path: SafariExtension/Info.plist
+      properties:
+        CFBundleName: Haul
+        CFBundleDisplayName: Haul
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSHumanReadableCopyright: © 2026 Zewify
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SafariWebExtensionHandler
+    entitlements:
+      path: SafariExtension/HaulSafari.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+    postBuildScripts:
+      - name: Strip media grabbing from the store edition
+        script: ./scripts/strip-media.sh
+        shell: /bin/bash
+        inputFiles: ["$(SRCROOT)/scripts/strip-media.sh", "$(SRCROOT)/Extension/manifest.json", "$(SRCROOT)/Extension/lib/media.js"]
+        outputFiles: ["$(DERIVED_FILE_DIR)/strip-media.stamp"]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zewify.haul.safari
+        PRODUCT_NAME: HaulSafari
+        ENABLE_HARDENED_RUNTIME: YES
+        # The strip script rewrites the copied extension, which the script sandbox would refuse.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
 
   HaulTests:
     type: bundle.unit-test

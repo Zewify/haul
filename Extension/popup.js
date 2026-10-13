@@ -1,0 +1,73 @@
+const api = globalThis.browser ?? globalThis.chrome;
+const $ = (id) => document.getElementById(id);
+
+async function currentTab() {
+  const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+  return tab;
+}
+
+async function render() {
+  const tab = await currentTab();
+  const state = await api.runtime.sendMessage({ type: 'status', tabId: tab && tab.id });
+  $('connect').hidden = true; $('down').hidden = true; $('ready').hidden = true;
+  const dot = $('dot');
+  dot.className = 'dot';
+  if (!state || !state.connected) {
+    $('state').textContent = 'not running';
+    $('down').hidden = false;
+    $('portHint').textContent = `Looking on port ${state ? state.port : 48512}.`;
+    return;
+  }
+  if (!state.paired) {
+    $('state').textContent = 'not connected';
+    dot.classList.add('warn');
+    $('connect').hidden = false;
+    return;
+  }
+  $('state').textContent = state.capture ? 'connected' : 'paused';
+  dot.classList.add('on');
+  $('ready').hidden = false;
+  $('capture').checked = !!state.capture;
+  $('mediaSection').hidden = !state.media;
+  if (state.media) {
+    const list = $('media');
+    list.textContent = '';
+    const items = state.items || [];
+    $('noMedia').hidden = items.length > 0;
+    for (const item of items.slice().reverse()) {
+      const li = document.createElement('li');
+      const span = document.createElement('span');
+      span.textContent = HaulMedia.describeMedia(item);
+      span.title = item.url;
+      const button = document.createElement('button');
+      button.textContent = 'Grab';
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        const result = await api.runtime.sendMessage({ type: 'grab', item, referrer: tab.url, pageTitle: tab.title });
+        button.textContent = result && result.ok ? 'Sent' : (result && result.error) || 'Failed';
+      });
+      li.append(span, button);
+      list.append(li);
+    }
+  }
+}
+
+$('pairButton').addEventListener('click', async () => {
+  $('pairButton').disabled = true;
+  $('pairButton').textContent = 'Waiting for Haul…';
+  const result = await api.runtime.sendMessage({ type: 'pair' });
+  if (!result || !result.ok) {
+    $('pairError').hidden = false;
+    $('pairError').textContent = (result && result.error) || 'Could not connect';
+    $('pairButton').disabled = false;
+    $('pairButton').textContent = 'Connect to Haul';
+  }
+  await render();
+});
+$('capture').addEventListener('change', async (event) => {
+  await api.runtime.sendMessage({ type: 'setCapture', value: event.target.checked });
+  await render();
+});
+$('options').addEventListener('click', (event) => { event.preventDefault(); api.runtime.openOptionsPage(); });
+$('disconnect').addEventListener('click', async (event) => { event.preventDefault(); await api.runtime.sendMessage({ type: 'disconnect' }); await render(); });
+render();

@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 (cd Core && swift test --quiet)
-if [[ -d Extension/lib ]]; then (cd Extension && node --test --test-reporter=dot lib/ >/dev/null); fi
+if [[ -d Extension/lib ]]; then (cd Extension && node --test lib/*.test.js >/dev/null); fi
 xcodegen generate --quiet
 xcodebuild -project Haul.xcodeproj -scheme Haul -configuration Debug -derivedDataPath build/DerivedData \
   -destination 'platform=macOS,arch=arm64' -quiet test

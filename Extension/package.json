@@ -1,0 +1,6 @@
+{
+  "name": "haul-extension",
+  "private": true,
+  "description": "The Haul browser extension: hands downloads to the Haul app.",
+  "scripts": { "test": "node --test lib/*.test.js" }
+}
