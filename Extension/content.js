@@ -20,7 +20,13 @@
   // The popup asks for the page's own video sources (direct edition); the store edition's stub finds nothing.
   api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || message.type !== 'scan') return false;
-    const found = globalThis.HaulMedia && HaulMedia.findInPage ? HaulMedia.findInPage(document.documentElement.outerHTML) : [];
+    const media = globalThis.HaulMedia;
+    let found = [];
+    if (media && media.findDashSets) {
+      const html = document.documentElement.outerHTML;
+      // Joinable DASH pairs first (video + audio, this page's video before others), then plain progressive files.
+      found = media.findDashSets(html, media.pageVideoId(location.href)).concat(media.findInPage(html));
+    }
     sendResponse(found);
     return false;
   });

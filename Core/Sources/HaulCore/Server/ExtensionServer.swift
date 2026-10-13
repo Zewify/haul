@@ -10,12 +10,14 @@ public struct IncomingDownload: Codable, Sendable, Hashable {
     public var cookies: String?
     public var userAgent: String?
     public var headers: [String: String]?
-    /// `file` or `hls`; only on `/media`.
+    /// `file`, `hls` or `dash`; only on `/media`.
     public var kind: String?
     public var pageTitle: String?
+    /// For `dash`: the audio track; `url` is the video track.
+    public var audioUrl: String?
 
     public init(url: String, filename: String? = nil, referrer: String? = nil, cookies: String? = nil, userAgent: String? = nil,
-                headers: [String: String]? = nil, kind: String? = nil, pageTitle: String? = nil) {
+                headers: [String: String]? = nil, kind: String? = nil, pageTitle: String? = nil, audioUrl: String? = nil) {
         self.url = url
         self.filename = filename
         self.referrer = referrer
@@ -24,6 +26,7 @@ public struct IncomingDownload: Codable, Sendable, Hashable {
         self.headers = headers
         self.kind = kind
         self.pageTitle = pageTitle
+        self.audioUrl = audioUrl
     }
 
     public var context: RequestContext {

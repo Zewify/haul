@@ -68,11 +68,12 @@ try {
   const tabs = await session.send('Runtime.evaluate', { expression: `chrome.tabs.query({}).then(t => JSON.stringify(t.map(x => ({id: x.id, url: x.url, title: x.title}))))`, awaitPromise: true, returnByValue: true });
   const tab = JSON.parse(tabs.result.result.value).find((t) => t.url && t.url.startsWith(pageURL.split('?')[0].slice(0, 30)));
   if (!tab) throw new Error('could not find the page tab');
-  console.log('page title:', tab.title);
+  console.log('page title:', tab.title, '| url:', tab.url);
   const state = await ask({ type: 'status', tabId: tab.id });
   console.log(`sniffed ${state.items.length} item(s):`);
-  for (const item of state.items) console.log(`  ${item.kind}  ${item.contentType || '-'}  ${item.size || '?'}  ${item.url.slice(0, 140)}`);
-  const pick = state.items.find((i) => i.kind === 'hls') || state.items.filter((i) => i.kind === 'file').sort((a, b) => (b.size || 0) - (a.size || 0))[0];
+  for (const item of state.items) console.log(`  ${item.kind}  ${item.label || item.contentType || '-'}  ${item.size || '?'}  ${item.url.slice(0, 100)}`);
+  const pick = state.items.find((i) => i.kind === 'dash' && /^This video/.test(i.label || '')) || state.items.find((i) => i.kind === 'dash') || state.items.find((i) => i.kind === 'hls')
+    || state.items.filter((i) => i.kind === 'file').sort((a, b) => (b.size || 0) - (a.size || 0))[0];
   if (!pick) throw new Error('nothing to grab');
   console.log('grabbing', pick.kind, pick.url.slice(0, 120));
   const before = snapshot();
@@ -84,11 +85,17 @@ try {
   await sleep(300);
   await osa('tell application "System Events" to keystroke return');
   let landed = null;
-  for (let i = 0; i < 240; i++) {
+  let lastSize = -1, stableFor = 0;
+  for (let i = 0; i < 300; i++) {
     await sleep(1000);
     const now = snapshot();
-    const fresh = Object.keys(now).filter((f) => !(f in before) && !f.endsWith('.haulpart'));
-    if (fresh.length) { landed = fresh.map((f) => `${f} (${now[f]} bytes)`); break; }
+    // A DASH grab writes "(video)" and "(audio)" parts first; only the joined file counts, once it stops growing.
+    const fresh = Object.keys(now).filter((f) => !(f in before) && !f.endsWith('.haulpart') && !/ \((video|audio)\)\.mp4$/.test(f));
+    if (!fresh.length) continue;
+    const size = now[fresh[0]];
+    stableFor = size === lastSize ? stableFor + 1 : 0;
+    lastSize = size;
+    if (stableFor >= 2) { landed = fresh.map((f) => `${f} (${now[f]} bytes)`); break; }
   }
   if (!landed) throw new Error('no finished file appeared in ~/Downloads within 4 minutes');
   console.log('landed', landed.join(', '));

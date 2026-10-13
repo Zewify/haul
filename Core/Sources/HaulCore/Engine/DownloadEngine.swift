@@ -217,6 +217,13 @@ public final class DownloadEngine {
                 let result = await task.run()
                 self?.finished(id, with: result)
             }
+        case .dash:
+            let task = DashTask(download: downloads[index], connections: effectiveConnections, session: session, retryDelays: retryDelays, onProgress: onProgress)
+            tasks[id] = task
+            runners[id] = Task { [weak self] in
+                let result = await task.run()
+                self?.finished(id, with: result)
+            }
         }
     }
 
@@ -243,6 +250,25 @@ public final class DownloadEngine {
         log.notice("\(result.name, privacy: .public): \(String(describing: result.state), privacy: .public)")
         changed()
         pump()
+        if result.media, result.state == .finished, let path = result.finalPath {
+            Task { [weak self] in
+                let info = await MediaInfo.inspect(URL(fileURLWithPath: path))
+                self?.noteMedia(id, info: info)
+            }
+        }
+    }
+
+    /// Grabbed video that turns out to have no sound gets a note, so the row says so instead of the user finding out later.
+    private func noteMedia(_ id: UUID, info: MediaInfo?) {
+        guard let index = downloads.firstIndex(where: { $0.id == id }), let info else { return }
+        if info.hasVideo && !info.hasAudio {
+            downloads[index].mediaNote = "No sound: the site streams audio separately"
+        } else if !info.hasVideo && info.hasAudio {
+            downloads[index].mediaNote = "Audio only"
+        } else {
+            downloads[index].mediaNote = nil
+        }
+        changed()
     }
 
     private func changed() {
@@ -259,3 +285,4 @@ protocol Pausable: Sendable {
 
 extension DownloadTask: Pausable {}
 extension HLSTask: Pausable {}
+extension DashTask: Pausable {}

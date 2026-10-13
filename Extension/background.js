@@ -93,13 +93,13 @@ async function pair() {
 }
 
 /// Sends a URL to the app. Returns {ok, error}.
-async function handOver(url, { filename, referrer, pageTitle, kind } = {}) {
+async function handOver(url, { filename, referrer, pageTitle, kind, audioUrl } = {}) {
   if (!HaulRequest.isHTTP(url)) return { ok: false, error: 'Not an http link' };
   const s = await settings();
   if (!s.token) return { ok: false, error: 'Not connected to Haul' };
   let cookies = '';
   try { cookies = HaulRequest.cookieHeader(await api.cookies.getAll({ url })); } catch { /* no cookie permission */ }
-  const body = HaulRequest.buildDownloadBody({ url, filename, referrer, cookies, userAgent: navigator.userAgent, pageTitle, kind });
+  const body = HaulRequest.buildDownloadBody({ url, filename, referrer, cookies, userAgent: navigator.userAgent, pageTitle, kind, audioUrl });
   const result = await post(kind ? '/media' : '/downloads', body);
   if (result.ok) return { ok: true, id: result.json && result.json.id };
   if (result.status === 401) await api.storage.local.set({ token: null });
@@ -184,7 +184,7 @@ function installMediaSniffer() {
 /// What the page's own source says about its video: muxed progressive files the sniffer never sees as one request.
 async function pageItems(tabId) {
   try {
-    const found = await api.tabs.sendMessage(tabId, { type: 'scan' });
+    const found = await api.tabs.sendMessage(tabId, { type: 'scan' }, { frameId: 0 });
     return Array.isArray(found) ? found : [];
   } catch {
     return [];
@@ -207,7 +207,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       case 'pair': return pair();
       case 'download': return handOver(message.url, { referrer: message.referrer || (sender.tab && sender.tab.url), pageTitle: message.pageTitle || (sender.tab && sender.tab.title) });
-      case 'grab': return handOver(message.item.url, { referrer: message.referrer, pageTitle: message.pageTitle, kind: message.item.kind });
+      case 'grab': return handOver(message.item.url, { referrer: message.referrer, pageTitle: message.pageTitle, kind: message.item.kind, audioUrl: message.item.audioUrl });
       case 'setCapture': await api.storage.local.set({ capture: !!message.value }); return { ok: true };
       case 'setPort': await api.storage.local.set({ port: Number(message.value) || 48512 }); return refreshStatus();
 

@@ -32,7 +32,7 @@ What is left before Haul can ship. Tick items here rather than tracking them els
 ## Product
 
 - [ ] Speed limiter and scheduler (Pro, after 1.0).
-- [ ] Grabber: DASH sites give silent video tracks and separate audio; muxing them needs a muxer the app does not ship. Decide whether to ship one (ffmpeg is LGPL; a native AVAssetWriter remux can join compatible tracks) or to label those items "video only".
+- [x] Grabber: DASH tracks are joined natively (AVFoundation passthrough); verified on a Facebook reel 2026-10-14. VP9-only videos cannot be joined and are not offered.
 - [ ] Grabber: the catch panel for media should show which item is which (HD with audio, SD, stream) and let the user pick; today the popup shows the list and the panel shows one.
 - [ ] Notifications when a download finishes.
 - [ ] Website pages in the `zewify` repo (`/haul/`), with screenshots from `scripts/window-shot.swift`.

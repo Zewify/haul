@@ -76,6 +76,8 @@ public enum DownloadState: Codable, Hashable, Sendable {
 
 public enum DownloadKind: String, Codable, Sendable {
     case file, hls
+    /// A video track and an audio track from a DASH site, downloaded separately and joined into one file.
+    case dash
 }
 
 /// One download, as the library stores it. Everything the engine needs to resume it is here.
@@ -109,6 +111,11 @@ public struct Download: Codable, Identifiable, Hashable, Sendable {
     public var mediaOffset: Int64?
     /// A security-scoped bookmark for a folder chosen for this download alone, so the sandbox lets the app back in.
     public var folderBookmark: Data?
+    /// For a DASH download: where the audio track comes from (the video track is `url`).
+    public var audioURL: URL?
+    /// Whether this came through the grabber; finished media is inspected and `mediaNote` set when it has no sound.
+    public var media: Bool = false
+    public var mediaNote: String?
 
     public init(id: UUID = UUID(), url: URL, kind: DownloadKind = .file, name: String, folder: URL,
                 context: RequestContext = RequestContext(), added: Date = Date()) {
@@ -124,12 +131,45 @@ public struct Download: Codable, Identifiable, Hashable, Sendable {
         self.added = added
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case id, url, finalURL, kind, name, folder, size, context, state, segments, resumable, validator, contentType, added, finished,
+             partPath, finalPath, mediaDone, mediaTotal, mediaOffset, folderBookmark, audioURL, media, mediaNote
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        url = try c.decode(URL.self, forKey: .url)
+        finalURL = try c.decodeIfPresent(URL.self, forKey: .finalURL)
+        kind = try c.decodeIfPresent(DownloadKind.self, forKey: .kind) ?? .file
+        name = try c.decode(String.self, forKey: .name)
+        folder = try c.decode(URL.self, forKey: .folder)
+        size = try c.decodeIfPresent(Int64.self, forKey: .size)
+        context = try c.decodeIfPresent(RequestContext.self, forKey: .context) ?? RequestContext()
+        state = try c.decodeIfPresent(DownloadState.self, forKey: .state) ?? .paused
+        segments = try c.decodeIfPresent([Segment].self, forKey: .segments) ?? []
+        resumable = try c.decodeIfPresent(Bool.self, forKey: .resumable) ?? false
+        validator = try c.decodeIfPresent(String.self, forKey: .validator)
+        contentType = try c.decodeIfPresent(String.self, forKey: .contentType)
+        added = try c.decodeIfPresent(Date.self, forKey: .added) ?? Date()
+        finished = try c.decodeIfPresent(Date.self, forKey: .finished)
+        partPath = try c.decodeIfPresent(String.self, forKey: .partPath)
+        finalPath = try c.decodeIfPresent(String.self, forKey: .finalPath)
+        mediaDone = try c.decodeIfPresent(Int.self, forKey: .mediaDone)
+        mediaTotal = try c.decodeIfPresent(Int.self, forKey: .mediaTotal)
+        mediaOffset = try c.decodeIfPresent(Int64.self, forKey: .mediaOffset)
+        folderBookmark = try c.decodeIfPresent(Data.self, forKey: .folderBookmark)
+        audioURL = try c.decodeIfPresent(URL.self, forKey: .audioURL)
+        media = try c.decodeIfPresent(Bool.self, forKey: .media) ?? false
+        mediaNote = try c.decodeIfPresent(String.self, forKey: .mediaNote)
+    }
+
     public var bytesReceived: Int64 { segments.reduce(0) { $0 + $1.written } }
 
     /// 0...1 while the size is known (segments, for HLS), nil otherwise.
     public var fraction: Double? {
         if state == .finished { return 1 }
-        if kind == .hls {
+        if kind == .hls || kind == .dash {
             guard let mediaDone, let mediaTotal, mediaTotal > 0 else { return nil }
             return min(1, Double(mediaDone) / Double(mediaTotal))
         }

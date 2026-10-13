@@ -14,7 +14,13 @@ struct PendingCatch: Identifiable, Sendable {
     var probe: ProbeResult?
     var error: String?
     var context: RequestContext { incoming.context }
-    var kind: DownloadKind { incoming.kind == "hls" ? .hls : .file }
+    var kind: DownloadKind {
+        switch incoming.kind {
+        case "hls": .hls
+        case "dash": .dash
+        default: .file
+        }
+    }
 }
 
 /// The app's state: the library and its settings, the engine, the local server, licences and what waits for the user.
@@ -259,6 +265,8 @@ final class AppModel {
     func startCatch(_ pending: PendingCatch) {
         self.pending.removeAll { $0.id == pending.id }
         var download = Download(url: URL(string: pending.incoming.url)!, kind: pending.kind, name: pending.name, folder: pending.folder, context: pending.context)
+        download.media = pending.media
+        download.audioURL = pending.incoming.audioUrl.flatMap(URL.init(string:))
         if pending.folder.standardizedFileURL != folder.standardizedFileURL {
             // A folder chosen for this download alone: the sandbox only lets the app back in through a bookmark.
             download.folderBookmark = try? pending.folder.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
@@ -289,6 +297,15 @@ final class AppModel {
         }
         if kind == .hls {
             pending.name = Filename.mediaName(pageTitle: incoming.pageTitle ?? "Stream", url: url, contentType: nil)
+            return pending
+        }
+        if kind == .dash {
+            guard let audio = incoming.audioUrl, let audioURL = URL(string: audio), ["http", "https"].contains(audioURL.scheme?.lowercased() ?? "") else {
+                pending.error = "The stream names no audio track"
+                return pending
+            }
+            pending.name = Filename.mediaName(pageTitle: incoming.pageTitle ?? "Video", url: url, contentType: "video/mp4")
+            if let probe = try? await Probe.run(url, context: incoming.context, session: session) { pending.probe = probe }
             return pending
         }
         do {

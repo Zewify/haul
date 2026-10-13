@@ -32,9 +32,11 @@ test('describes a media item for the popup: what it is first, where it came from
   assert.deepEqual(describeMedia({ url: 'https://c.com/a/track', kind: 'file', contentType: 'audio/mp4' }), { title: 'Audio (mp4)', subtitle: 'c.com · track' });
   assert.deepEqual(describeMedia({ url: 'https://video.xx.fbcdn.net/v/AQPnrSrokbMLDufWCQ7y3NO00bw88F.mp4?x=1', kind: 'file', label: 'HD (video + audio)' }),
     { title: 'HD (video + audio)', subtitle: 'video.xx.fbcdn.net · AQPnrSrokbMLDufWCQ7y3NO00bw88F.mp4' });
+  assert.deepEqual(describeMedia({ url: 'https://video.xx.fbcdn.net/v/AQP.mp4', kind: 'dash', label: 'This video · 720p · video + audio', duration: 90 }),
+    { title: 'This video · 720p · video + audio · 1:30', subtitle: 'video.xx.fbcdn.net · AQP.mp4' });
 });
 
-const { normaliseMediaURL, findInPage } = require('./media.js');
+const { normaliseMediaURL, findInPage, findDashSets, pageVideoId } = require('./media.js');
 
 test('chunk range parameters are stripped so one stream is one item', () => {
   assert.equal(normaliseMediaURL('https://video.xx.fbcdn.net/o1/v/t2/f2/m366/AQN.mp4?efg=abc&bytestart=0&byteend=579646&_nc_cat=1'), 'https://video.xx.fbcdn.net/o1/v/t2/f2/m366/AQN.mp4?efg=abc&_nc_cat=1');
@@ -54,4 +56,42 @@ test('progressive video urls are found in a page source, unescaped and deduped',
     { url: 'https://cdn.example/clip.webm', kind: 'file', label: 'Video on page' },
   ]);
   assert.deepEqual(findInPage('<p>nothing</p>'), []);
+});
+
+test('dash representation sets embedded in a page become joinable video + audio items, H.264 before AV1, the page video first', () => {
+  const efg = (videoId, duration) => Buffer.from(JSON.stringify({ vencode_tag: 'dash', video_id: videoId, duration_s: duration })).toString('base64');
+  const rep = (id, mime, codecs, w, h, bw, videoId) => `{"representation_id":"${id}","mime_type":"${mime.replace('/', '\\/')}","codecs":"${codecs}","base_url":"https:\\/\\/video.xx.fbcdn.net\\/v\\/${id}.mp4?efg=${efg(videoId, 90)}\\u00253D&oh=1","bandwidth":${bw},"height":${h},"width":${w},"segments":[{"start":0,"end":1}]}`;
+  const set = (videoId, reps) => `{"initial_representation_ids":[],"representations":[${reps.join(',')}]}`;
+  const html = '<script>' + JSON.stringify({ x: 1 }) + '"all_video_dash_prefetch_representations":[' + [
+    set('111', [rep('a1', 'video/mp4', 'av01.0.08M.08', 1080, 1080, 900000, '111'), rep('a2', 'video/mp4', 'avc1.64001F', 720, 720, 800000, '111'), rep('a3', 'video/mp4', 'avc1.4D401E', 360, 360, 300000, '111'), rep('a4', 'audio/mp4', 'mp4a.40.5', 0, 0, 48000, '111'), rep('a5', 'audio/mp4', 'mp4a.40.2', 0, 0, 128000, '111')]),
+    set('222', [rep('b1', 'video/mp4', 'avc1.64001F', 854, 480, 500000, '222'), rep('b2', 'audio/mp4', 'mp4a.40.2', 0, 0, 96000, '222')]),
+  ].join(',') + '],"other":1</script>';
+  const items = findDashSets(html, '222');
+  assert.deepEqual(items.map((i) => ({ ...i, url: i.url.slice(0, 40), audioUrl: i.audioUrl.slice(0, 40) })), [
+    { kind: 'dash', videoId: '222', url: 'https://video.xx.fbcdn.net/v/b1.mp4?efg=', audioUrl: 'https://video.xx.fbcdn.net/v/b2.mp4?efg=', label: 'This video · 480p H.264 · video + audio', duration: 90, width: 854, height: 480, codec: 'H.264' },
+    { kind: 'dash', videoId: '111', url: 'https://video.xx.fbcdn.net/v/a2.mp4?efg=', audioUrl: 'https://video.xx.fbcdn.net/v/a5.mp4?efg=', label: 'Another video on this page · 720p H.264 · video + audio', duration: 90, width: 720, height: 720, codec: 'H.264' },
+    { kind: 'dash', videoId: '111', url: 'https://video.xx.fbcdn.net/v/a1.mp4?efg=', audioUrl: 'https://video.xx.fbcdn.net/v/a5.mp4?efg=', label: 'Another video on this page · 1080p AV1 · video + audio · plays on newer Macs only', duration: 90, width: 1080, height: 1080, codec: 'AV1' },
+  ], 'one item per codec family, H.264 first, the loudest audio, the page video first');
+  assert.deepEqual(findDashSets('<p>none</p>', '1'), []);
+  const vp9Only = '"all_video_dash_prefetch_representations":[' + set('333', [rep('c1', 'video/mp4', 'vp09.00.40.08', 1920, 1920, 900000, '333'), rep('c2', 'audio/mp4', 'mp4a.40.2', 0, 0, 96000, '333')]) + ']';
+  assert.deepEqual(findDashSets(vp9Only, '333'), [], 'codecs a Mac cannot join are left out');
+});
+
+test('video ids beyond the safe integer range survive the efg decoding', () => {
+  const efg = Buffer.from('{"vencode_tag":"dash","video_id":26934216426212982,"duration_s":900}').toString('base64');
+  const html = '"all_video_dash_prefetch_representations":[{"initial_representation_ids":[],"representations":['
+    + `{"representation_id":"v1","mime_type":"video\\/mp4","codecs":"avc1.64001F","base_url":"https:\\/\\/v.example\\/v1.mp4?efg=${efg}","bandwidth":1,"height":720,"width":720},`
+    + `{"representation_id":"a1","mime_type":"audio\\/mp4","codecs":"mp4a.40.2","base_url":"https:\\/\\/v.example\\/a1.mp4?efg=${efg}","bandwidth":1,"height":0,"width":0}]}]`;
+  const items = findDashSets(html, '26934216426212982');
+  assert.equal(items.length, 1);
+  assert.equal(items[0].videoId, '26934216426212982');
+  assert.match(items[0].label, /^This video/);
+  assert.equal(items[0].duration, 900);
+});
+
+test('the page video id comes from reel and watch urls', () => {
+  assert.equal(pageVideoId('https://www.facebook.com/reel/26934216426212982'), '26934216426212982');
+  assert.equal(pageVideoId('https://www.facebook.com/watch/?v=1234567890'), '1234567890');
+  assert.equal(pageVideoId('https://www.facebook.com/someone/videos/987654/'), '987654');
+  assert.equal(pageVideoId('https://example.com/page'), null);
 });

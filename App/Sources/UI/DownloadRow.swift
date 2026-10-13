@@ -26,7 +26,9 @@ struct DownloadRow: View {
                 HStack(spacing: 6) {
                     Text(detail).lineLimit(1)
                     Spacer()
-                    if download.resumable == false, download.state.isRunning, download.kind == .file {
+                    if let note = download.mediaNote, download.state == .finished {
+                        Label(note, systemImage: "speaker.slash").foregroundStyle(.orange)
+                    } else if download.resumable == false, download.state.isRunning, download.kind == .file {
                         Text("Cannot resume").foregroundStyle(.tertiary)
                     }
                 }
@@ -66,7 +68,7 @@ struct DownloadRow: View {
         case .downloading:
             [Format.percent(download.fraction), Format.speed(progress?.bytesPerSecond ?? 0),
              (progress?.eta).map { "\(Format.eta($0)) left" } ?? "",
-             download.kind == .file ? "\(download.segments.filter { !$0.isComplete }.count) connections" : "stream"]
+             download.kind == .hls ? "stream" : download.kind == .dash ? "part \(min((download.mediaDone ?? 0) + 1, 2)) of 2 · \(download.segments.filter { !$0.isComplete }.count) connections" : "\(download.segments.filter { !$0.isComplete }.count) connections"]
                 .filter { !$0.isEmpty }.joined(separator: " · ")
         case .paused: "Paused" + (download.fraction.map { " · \(Format.percent($0))" } ?? "")
         case .finished: download.finished.map { "Done · \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "Done"

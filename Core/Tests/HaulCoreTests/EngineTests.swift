@@ -219,6 +219,43 @@ struct EngineTests {
         #expect(engine.download(a) == nil)
     }
 
+    @Test func dashDownloadsJoinVideoAndAudioIntoOneFile() async throws {
+        let fixtures = folder.appendingPathComponent("fixtures", isDirectory: true)
+        try FileManager.default.createDirectory(at: fixtures, withIntermediateDirectories: true)
+        try Fixtures.videoOnly(at: fixtures.appendingPathComponent("v.mp4"))
+        try Fixtures.audioOnly(at: fixtures.appendingPathComponent("a.mp4"))
+        server["/v.mp4"] = .init(data: try Data(contentsOf: fixtures.appendingPathComponent("v.mp4")), contentType: "video/mp4")
+        server["/a.mp4"] = .init(data: try Data(contentsOf: fixtures.appendingPathComponent("a.mp4")), contentType: "audio/mp4")
+        let engine = engine()
+        var request = request("/v.mp4", name: "Joined.mp4")
+        request.kind = .dash
+        request.audioURL = server.url("/a.mp4")
+        let id = engine.add(request)
+        #expect(await eventually { engine.download(id)?.state == .finished || { if case .failed = engine.download(id)?.state { true } else { false } }() })
+        let done = try #require(engine.download(id))
+        #expect(done.state == .finished, "\(done.state)")
+        #expect(done.finalPath?.hasSuffix("/Joined.mp4") == true)
+        let info = try #require(await MediaInfo.inspect(URL(fileURLWithPath: done.finalPath ?? "/nowhere")))
+        #expect(info.hasVideo && info.hasAudio)
+        #expect(done.mediaNote == nil)
+        // The two part files are gone; only the joined file remains.
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: folder.path).filter { $0.contains("haulpart") }
+        #expect(leftovers.isEmpty, "\(leftovers)")
+    }
+
+    @Test func aFinishedMediaFileWithoutSoundIsNoted() async throws {
+        let fixtures = folder.appendingPathComponent("fixtures2", isDirectory: true)
+        try FileManager.default.createDirectory(at: fixtures, withIntermediateDirectories: true)
+        try Fixtures.videoOnly(at: fixtures.appendingPathComponent("silent.mp4"))
+        server["/silent.mp4"] = .init(data: try Data(contentsOf: fixtures.appendingPathComponent("silent.mp4")), contentType: "video/mp4")
+        let engine = engine()
+        var request = request("/silent.mp4", name: "Silent.mp4")
+        request.media = true
+        let id = engine.add(request)
+        #expect(await eventually { engine.download(id)?.state == .finished && engine.download(id)?.mediaNote != nil })
+        #expect(engine.download(id)?.mediaNote == "No sound: the site streams audio separately")
+    }
+
     @Test func changesAreReported() async throws {
         let engine = engine()
         let counter = Flag()

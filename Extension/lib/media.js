@@ -59,6 +59,93 @@
     return found;
   }
 
+  // The video a page is about, from its URL: /reel/<id>, /watch/?v=<id>, /videos/<id>/.
+  function pageVideoId(href) {
+    let u;
+    try { u = new URL(href); } catch { return null; }
+    const v = u.searchParams.get('v');
+    if (v && /^\d+$/.test(v)) return v;
+    const m = /\/(?:reel|reels|videos)\/(\d+)/.exec(u.pathname);
+    return m ? m[1] : null;
+  }
+
+  // Facebook embeds every DASH representation of every video on the page, as whole-file URLs, in
+  // "all_video_dash_prefetch_representations". Each URL's efg parameter is base64 JSON naming the video and its length.
+  function decodeEfg(url) {
+    try {
+      const raw = new URL(url).searchParams.get('efg') || '';
+      const text = atob(raw.replace(/=+$/, '').replace(/-/g, '+').replace(/_/g, '/'));
+      // Read the id as text: Facebook ids exceed JavaScript's safe integer range, and JSON.parse would round them.
+      const id = /"video_id":\s*"?(\d+)"?/.exec(text);
+      const duration = /"duration_s":\s*"?(\d+(?:\.\d+)?)"?/.exec(text);
+      return { videoId: id ? id[1] : null, duration: duration ? Number(duration[1]) : undefined };
+    } catch { return { videoId: null }; }
+  }
+  function balancedArray(text, start) {
+    let depth = 0, inString = false, escaped = false;
+    for (let i = start; i < text.length; i++) {
+      const c = text[i];
+      if (inString) { if (escaped) escaped = false; else if (c === '\\') escaped = true; else if (c === '"') inString = false; continue; }
+      if (c === '"') inString = true;
+      else if (c === '[') depth++;
+      else if (c === ']') { depth--; if (depth === 0) return text.slice(start, i + 1); }
+    }
+    return null;
+  }
+  // H.264 plays everywhere; AV1 only on recent hardware. Each family gets its own item, H.264 first.
+  function codecFamily(codecs) {
+    const c = (codecs || '').toLowerCase();
+    if (c.startsWith('avc1') || c.startsWith('avc3')) return { name: 'H.264', rank: 3, note: '' };
+    if (c.startsWith('hvc1') || c.startsWith('hev1')) return { name: 'HEVC', rank: 2, note: '' };
+    if (c.startsWith('av01')) return { name: 'AV1', rank: 1, note: ' · plays on newer Macs only' };
+    return null;   // VP9 and the rest cannot be joined into an MP4 on a Mac
+  }
+  function findDashSets(html, currentVideoId) {
+    const key = '"all_video_dash_prefetch_representations":';
+    const byVideo = new Map();
+    let from = 0;
+    while (true) {
+      const at = html.indexOf(key, from);
+      if (at < 0) break;
+      from = at + key.length;
+      const raw = balancedArray(html, from);
+      if (!raw) continue;
+      let sets;
+      try { sets = JSON.parse(raw); } catch { continue; }
+      for (const set of sets) {
+        for (const rep of set.representations || []) {
+          if (!rep.base_url || !rep.mime_type) continue;
+          const url = String(rep.base_url).replace(/\\\//g, '/').replace(/\\u0025/gi, '%');
+          const { videoId, duration } = decodeEfg(url);
+          if (!videoId) continue;
+          const entry = byVideo.get(videoId) || { video: [], audio: [], duration };
+          (rep.mime_type.startsWith('audio/') ? entry.audio : entry.video).push({ url, codecs: rep.codecs, width: rep.width, height: rep.height, bandwidth: rep.bandwidth });
+          byVideo.set(videoId, entry);
+        }
+      }
+    }
+    const items = [];
+    for (const [videoId, entry] of byVideo) {
+      if (!entry.video.length || !entry.audio.length) continue;
+      const audio = entry.audio.slice().sort((a, b) => b.bandwidth - a.bandwidth)[0];
+      const own = videoId === currentVideoId;
+      const families = new Map();
+      for (const v of entry.video) {
+        const family = codecFamily(v.codecs);
+        if (!family) continue;
+        const best = families.get(family.name);
+        if (!best || v.height > best.height || (v.height === best.height && v.bandwidth > best.bandwidth)) families.set(family.name, { ...v, family });
+      }
+      for (const v of [...families.values()].sort((a, b) => b.family.rank - a.family.rank)) {
+        items.push({ kind: 'dash', videoId, url: v.url, audioUrl: audio.url,
+          label: `${own ? 'This video' : 'Another video on this page'} · ${v.height}p ${v.family.name} · video + audio${v.family.note}`,
+          duration: entry.duration, width: v.width, height: v.height, codec: v.family.name });
+      }
+    }
+    items.sort((a, b) => (b.videoId === currentVideoId) - (a.videoId === currentVideoId));
+    return items;
+  }
+
   function formatSize(bytes) {
     if (!bytes) return '';
     const units = ['B', 'KB', 'MB', 'GB'];
@@ -78,7 +165,7 @@
     const type = (item.contentType || '').split(';')[0].trim().toLowerCase();
     const format = type.split('/')[1] || extensionOf(item.url);
     let title;
-    if (item.label) title = item.label;
+    if (item.label) title = item.label + (item.duration ? ` · ${Math.floor(item.duration / 60)}:${String(Math.round(item.duration % 60)).padStart(2, '0')}` : '');
     else if (item.kind === 'hls') title = 'Stream (HLS)';
     else if (type.startsWith('audio/')) title = `Audio (${format})`;
     else title = format ? `Video (${format})` : 'Video';
@@ -86,7 +173,7 @@
     return { title, subtitle: [host, name].filter(Boolean).join(' · ') };
   }
 
-  const api = { classifyResponse, describeMedia, formatSize, normaliseMediaURL, findInPage };
+  const api = { classifyResponse, describeMedia, formatSize, normaliseMediaURL, findInPage, findDashSets, pageVideoId };
   root.HaulMedia = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(globalThis);

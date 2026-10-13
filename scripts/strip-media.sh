@@ -17,5 +17,5 @@ data["permissions"] = [p for p in data.get("permissions", []) if p != "webReques
 json.dump(data, open(manifest, "w"), indent=2)
 media = os.path.join(root, "lib", "media.js")
 if os.path.exists(media):
-    open(media, "w").write("// Media grabbing is not part of this edition.\n(function (root) { root.HaulMedia = { classifyResponse: () => null, describeMedia: (i) => ({ title: i.url, subtitle: '' }), formatSize: () => '', normaliseMediaURL: (u) => u, findInPage: () => [] }; })(globalThis);\n")
+    open(media, "w").write("// Media grabbing is not part of this edition.\n(function (root) { root.HaulMedia = { classifyResponse: () => null, describeMedia: (i) => ({ title: i.url, subtitle: '' }), formatSize: () => '', normaliseMediaURL: (u) => u, findInPage: () => [], findDashSets: () => [], pageVideoId: () => null }; })(globalThis);\n")
 PY
