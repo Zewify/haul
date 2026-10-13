@@ -40,7 +40,6 @@ struct MainWindow: View {
                 .listStyle(.inset)
             }
         }
-        .frame(minWidth: 560, minHeight: 320)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Picker("Show", selection: $filter) {

@@ -21,8 +21,14 @@ struct DownloadRow: View {
                     Spacer()
                     Text(trailing).font(.callout.monospacedDigit()).foregroundStyle(.secondary)
                 }
-                SegmentMap(download: download)
-                    .frame(height: 6)
+                // A finished download has nothing left to show as progress; its row says where the file is instead.
+                // The clear stand-in keeps the row stretched to the list's width the way the bar did.
+                if download.state != .finished {
+                    SegmentMap(download: download)
+                        .frame(height: 6)
+                } else {
+                    Color.clear.frame(height: 0)
+                }
                 HStack(spacing: 6) {
                     Text(detail).lineLimit(1)
                     Spacer()
@@ -35,8 +41,10 @@ struct DownloadRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             actions
         }
+        .frame(maxWidth: .infinity)
         .padding(.vertical, 6)
     }
 
@@ -71,10 +79,19 @@ struct DownloadRow: View {
              download.kind == .hls ? "stream" : download.kind == .dash ? "part \(min((download.mediaDone ?? 0) + 1, 2)) of 2 · \(download.segments.filter { !$0.isComplete }.count) connections" : "\(download.segments.filter { !$0.isComplete }.count) connections"]
                 .filter { !$0.isEmpty }.joined(separator: " · ")
         case .paused: "Paused" + (download.fraction.map { " · \(Format.percent($0))" } ?? "")
-        case .finished: download.finished.map { "Done · \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "Done"
+        case .finished:
+            ["Done", download.finished.map { $0.formatted(date: .abbreviated, time: .shortened) }, folderDescription]
+                .compactMap { $0 }.joined(separator: " · ")
         case .cancelled: "Cancelled"
         case .failed(let message): "Failed · \(message)"
         }
+    }
+
+    /// Where the finished file is, as a person would say it: "~/Downloads".
+    private var folderDescription: String? {
+        guard let path = download.finalPath else { return nil }
+        let folder = (path as NSString).deletingLastPathComponent
+        return (folder as NSString).abbreviatingWithTildeInPath
     }
 
     @ViewBuilder private var actions: some View {
@@ -91,7 +108,7 @@ struct DownloadRow: View {
                 RowButton("arrow.clockwise", "Retry") { engine.retry(download.id) }
                 RowButton("trash", "Remove") { engine.remove(download.id, deleteFile: false) }
             case .finished:
-                RowButton("magnifyingglass", "Show in Finder") {
+                RowButton("folder", "Show in Finder") {
                     if let path = download.finalPath { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
                 }
                 RowButton("trash", "Remove from list") { engine.remove(download.id, deleteFile: false) }
