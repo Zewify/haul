@@ -34,6 +34,8 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Test
+        env:
+          HAUL_SKIP_HOSTED: "1"
         run: ./scripts/test.sh
       - name: Package
         run: ./scripts/package.sh
