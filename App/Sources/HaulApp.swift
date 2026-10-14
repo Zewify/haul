@@ -53,49 +53,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// The menu bar glyph: a ring that fills with the combined progress while anything downloads, an arrow otherwise.
+/// The menu bar glyph is the app icon's mark: the segmented shaft and the arrowhead, as a template image.
+/// While anything downloads, the shaft's four segments fill from the top with the combined progress.
 struct MenuBarIcon: View {
     let engine: DownloadEngine
 
     var body: some View {
         let combined = engine.combined
-        if let fraction = combined.fraction {
-            Image(nsImage: RingImage.make(fraction: fraction))
-                .accessibilityLabel("Haul, \(Format.percent(fraction)) downloaded")
-        } else {
-            Image(systemName: "arrow.down.circle").accessibilityLabel("Haul")
-        }
+        Image(nsImage: MenuBarGlyph.make(fraction: combined.fraction))
+            .accessibilityLabel(combined.fraction.map { "Haul, \(Format.percent($0)) downloaded" } ?? "Haul")
     }
 }
 
-enum RingImage {
-    /// A 18-point template image: a thin track with the completed arc on top and a small arrow in the middle.
-    static func make(fraction: Double) -> NSImage {
+enum MenuBarGlyph {
+    /// An 18-point template image. With a fraction, segments past the progress are drawn faint.
+    static func make(fraction: Double?) -> NSImage {
         let size = NSSize(width: 18, height: 18)
-        let image = NSImage(size: size, flipped: false) { rect in
-            let center = NSPoint(x: rect.midX, y: rect.midY)
-            let radius = rect.width / 2 - 1.5
-            let track = NSBezierPath()
-            track.appendArc(withCenter: center, radius: radius, startAngle: 0, endAngle: 360)
-            track.lineWidth = 1.5
-            NSColor.black.withAlphaComponent(0.3).setStroke()
-            track.stroke()
-            let arc = NSBezierPath()
-            arc.appendArc(withCenter: center, radius: radius, startAngle: 90, endAngle: 90 - 360 * fraction, clockwise: true)
-            arc.lineWidth = 2
-            arc.lineCapStyle = .round
+        let image = NSImage(size: size, flipped: false) { _ in
+            let lit = fraction.map { max(1, Int(($0 * 4).rounded(.up))) } ?? 4
+            // The shaft: four segments stacked from the top, the same proportions as the app icon.
+            let width: CGFloat = 5, height: CGFloat = 2, gap: CGFloat = 0.75, x: CGFloat = 6.5
+            for index in 0..<4 {
+                let y = 15.25 - CGFloat(index) * (height + gap)
+                let segment = NSBezierPath(roundedRect: NSRect(x: x, y: y, width: width, height: height), xRadius: 0.6, yRadius: 0.6)
+                NSColor.black.withAlphaComponent(index < lit ? 1 : 0.3).setFill()
+                segment.fill()
+            }
+            // The arrowhead below it.
+            let head = NSBezierPath()
+            head.move(to: NSPoint(x: 3, y: 6.5))
+            head.line(to: NSPoint(x: 15, y: 6.5))
+            head.line(to: NSPoint(x: 9, y: 0.75))
+            head.close()
+            head.lineJoinStyle = .round
+            head.lineWidth = 1.2
+            NSColor.black.setFill()
             NSColor.black.setStroke()
-            arc.stroke()
-            let arrow = NSBezierPath()
-            arrow.move(to: NSPoint(x: center.x, y: center.y + 4))
-            arrow.line(to: NSPoint(x: center.x, y: center.y - 4))
-            arrow.move(to: NSPoint(x: center.x - 3, y: center.y - 1))
-            arrow.line(to: NSPoint(x: center.x, y: center.y - 4))
-            arrow.line(to: NSPoint(x: center.x + 3, y: center.y - 1))
-            arrow.lineWidth = 1.5
-            arrow.lineCapStyle = .round
-            arrow.lineJoinStyle = .round
-            arrow.stroke()
+            head.fill()
+            head.stroke()
             return true
         }
         image.isTemplate = true
