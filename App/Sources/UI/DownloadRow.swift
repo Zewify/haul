@@ -87,10 +87,14 @@ struct DownloadRow: View {
         }
     }
 
-    /// Where the finished file is, as a person would say it: "~/Downloads".
+    /// Where the finished file is, as a person would say it: "~/Downloads". Inside the sandbox, HOME is the app's
+    /// container, so the real home folder comes from the passwd entry.
     private var folderDescription: String? {
         guard let path = download.finalPath else { return nil }
         let folder = (path as NSString).deletingLastPathComponent
+        if let home = getpwuid(getuid()).flatMap({ String(validatingCString: $0.pointee.pw_dir) }), folder.hasPrefix(home) {
+            return "~" + folder.dropFirst(home.count)
+        }
         return (folder as NSString).abbreviatingWithTildeInPath
     }
 
