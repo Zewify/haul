@@ -29,7 +29,6 @@ struct PendingCatch: Identifiable, Sendable {
 final class AppModel {
     private(set) var library: Library
     let engine: DownloadEngine
-    private(set) var license: License?
     private(set) var serverError: String?
     private(set) var serverListening = false
     /// Downloads the extension sent, oldest first; the catch panel shows the first.
@@ -48,30 +47,17 @@ final class AppModel {
     @ObservationIgnored private let log = Logger(subsystem: "com.zewify.haul", category: "model")
 
     var settings: Settings { library.settings }
-    var edition: Edition { Edition.current }
-    var isPro: Bool { license != nil }
-    var gate: FeatureGate { FeatureGate(edition: edition, isPro: isPro) }
     static var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0" }
 
     init(store: LibraryStore = .standard) {
         self.store = store
         var library = store.load()
-        var license: License?
-        #if DEBUG
-        // `-HaulForcePro YES` unlocks Pro for UI checks without a licence.
-        if UserDefaults.standard.bool(forKey: "HaulForcePro") {
-            license = License(id: "debug", licensee: "Debug build")
-        }
-        #endif
-        if license == nil, let key = library.settings.licenseKey { license = try? License.verify(key) }
-        self.license = license
-        let gate = FeatureGate(edition: Edition.current, isPro: license != nil)
-        library.settings.connections = gate.clampConnections(library.settings.connections)
-        library.settings.concurrent = gate.clampConcurrent(library.settings.concurrent)
+        library.settings.connections = Limits.clampConnections(library.settings.connections)
+        library.settings.concurrent = Limits.clampConcurrent(library.settings.concurrent)
         self.library = library
         let folder = Self.resolveFolder(library.settings)
         scopedFolder = folder.scoped
-        engine = DownloadEngine(downloads: library.downloads, gate: gate, connections: library.settings.connections,
+        engine = DownloadEngine(downloads: library.downloads, connections: library.settings.connections,
                                 concurrent: library.settings.concurrent, folder: folder.url)
         pairingApprover = { request in
             await AppModel.askToPair(request)
@@ -114,13 +100,13 @@ final class AppModel {
     func setAskBeforeStarting(_ value: Bool) { library.settings.askBeforeStarting = value; markDirty() }
 
     func setConnections(_ value: Int) {
-        library.settings.connections = gate.clampConnections(value)
+        library.settings.connections = Limits.clampConnections(value)
         engine.connections = library.settings.connections
         markDirty()
     }
 
     func setConcurrent(_ value: Int) {
-        library.settings.concurrent = gate.clampConcurrent(value)
+        library.settings.concurrent = Limits.clampConcurrent(value)
         engine.concurrent = library.settings.concurrent
         markDirty()
     }
@@ -182,39 +168,6 @@ final class AppModel {
         markDirty()
     }
 
-    enum LicenseProblem: Error, LocalizedError {
-        case malformed, badSignature, wrongProduct
-
-        var errorDescription: String? {
-            switch self {
-            case .malformed: "That does not look like a Haul licence key. Paste the whole key, including HAUL1-."
-            case .badSignature: "This key was not issued by Zewify."
-            case .wrongProduct: "This key is for another Zewify product."
-            }
-        }
-    }
-
-    func setLicense(_ key: String) throws {
-        do {
-            license = try License.verify(key)
-        } catch .malformed { throw LicenseProblem.malformed }
-        catch .badSignature { throw LicenseProblem.badSignature }
-        catch .wrongProduct { throw LicenseProblem.wrongProduct }
-        library.settings.licenseKey = key.filter { !$0.isWhitespace }
-        engine.gate = gate
-        restartServer()
-        markDirty()
-    }
-
-    func removeLicense() {
-        license = nil
-        library.settings.licenseKey = nil
-        setConnections(library.settings.connections)
-        setConcurrent(library.settings.concurrent)
-        engine.gate = gate
-        restartServer()
-    }
-
     // MARK: Adding downloads
 
     enum AddError: Error, LocalizedError {
@@ -248,7 +201,7 @@ final class AppModel {
             }
             if probe.contentType == "text/html" {
                 // A page, not a file: a Facebook video page can still be read for its tracks; anything else needs the extension.
-                guard gate.offersMedia, FacebookPage.isFacebook(url) else { throw AddError.webPage(line) }
+                guard FacebookPage.isFacebook(url) else { throw AddError.webPage(line) }
                 guard let download = try await facebookDownload(for: url) else { throw AddError.noVideoOnPage(line) }
                 engine.add(download)
                 continue
@@ -366,7 +319,7 @@ final class AppModel {
 
     func startServer() {
         server?.stop()
-        let status = ServerStatus(version: Self.version, edition: edition, features: .init(media: gate.offersMedia))
+        let status = ServerStatus(version: Self.version)
         let server = ExtensionServer(port: settings.port, token: settings.pairingToken, status: status, delegate: self)
         server.paired = !settings.pairedClients.isEmpty
         self.server = server
@@ -380,10 +333,6 @@ final class AppModel {
             log.error("server: \(error.localizedDescription, privacy: .public)")
             Task { try? await Task.sleep(for: .seconds(10)); if !self.serverListening { self.startServer() } }
         }
-    }
-
-    private func restartServer() {
-        if server != nil { startServer() }
     }
 
     var serverPort: UInt16 { settings.port }
@@ -411,9 +360,6 @@ extension AppModel: ExtensionServerDelegate {
     }
 
     func server(_ server: ExtensionServer, receive download: IncomingDownload, media: Bool) async throws -> UUID {
-        if media, !gate.allows(.mediaGrabber) {
-            throw ServerError.badRequest("Grabbing video needs Haul Pro.")
-        }
         let pending = await makeCatch(download, media: media)
         if let error = pending.error {
             // Refused, so the browser keeps its own download rather than ending up with neither.

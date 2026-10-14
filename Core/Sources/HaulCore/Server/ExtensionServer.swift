@@ -55,14 +55,13 @@ public struct ServerStatus: Codable, Sendable, Hashable {
 
     public var app = "haul"
     public var version: String
-    public var edition: Edition
+    /// What this build offers; the grabber is always on, the field stays so the extension's check keeps working.
     public var features: Features
     /// Filled in per reply: whether any browser has paired.
     public var paired = false
 
-    public init(version: String, edition: Edition, features: Features) {
+    public init(version: String, features: Features = Features(media: true)) {
         self.version = version
-        self.edition = edition
         self.features = features
     }
 }

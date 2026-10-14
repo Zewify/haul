@@ -18,16 +18,16 @@ struct EngineTests {
     }
 
     func engine(concurrent: Int = 2) -> DownloadEngine {
-        DownloadEngine(downloads: [], gate: FeatureGate(edition: .store, isPro: false), connections: 2, concurrent: concurrent, folder: folder, retryDelays: [0.05])
+        DownloadEngine(downloads: [], connections: 2, concurrent: concurrent, folder: folder, retryDelays: [0.05])
     }
 
     func request(_ path: String, name: String? = nil) -> Download {
         Download(url: server.url(path), name: name ?? String(path.dropFirst()), folder: folder)
     }
 
-    /// Polls until the condition holds or two seconds pass.
+    /// Polls until the condition holds or five seconds pass (the suites run in parallel, so a slow start is normal).
     func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
-        for _ in 0..<200 {
+        for _ in 0..<500 {
             if condition() { return true }
             try? await Task.sleep(for: .milliseconds(10))
         }
@@ -122,7 +122,7 @@ struct EngineTests {
         interrupted.state = .downloading
         var queued = request("/b.bin")
         queued.state = .queued
-        let engine = DownloadEngine(downloads: [interrupted, queued], gate: FeatureGate(edition: .store, isPro: false), connections: 2, concurrent: 2, folder: folder, retryDelays: [0.05])
+        let engine = DownloadEngine(downloads: [interrupted, queued], connections: 2, concurrent: 2, folder: folder, retryDelays: [0.05])
         #expect(engine.download(interrupted.id)?.state == .paused)
         #expect(await eventually { engine.download(queued.id)?.state == .finished })
     }

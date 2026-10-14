@@ -25,7 +25,7 @@ struct ExtensionServerTests {
     let token = "secret-token-1234567890"
 
     func makeServer(media: Bool = false) throws -> ExtensionServer {
-        let status = ServerStatus(version: "0.1", edition: .store, features: .init(media: media))
+        let status = ServerStatus(version: "0.1", features: .init(media: media))
         let server = ExtensionServer(port: 0, token: token, status: status, delegate: delegate)
         try server.start()
         return server
@@ -49,7 +49,6 @@ struct ExtensionServerTests {
         let (status, json) = try await send(server, "GET", "/status", origin: nil)
         #expect(status == 200)
         #expect(json["app"] as? String == "haul")
-        #expect(json["edition"] as? String == "store")
         #expect((json["features"] as? [String: Any])?["media"] as? Bool == true)
         #expect(json["paired"] as? Bool == false)
     }
@@ -127,18 +126,18 @@ struct ExtensionServerTests {
         #expect(unknown == 404)
     }
 
-    @Test func mediaOnlyInTheDirectEdition() async throws {
-        let store = try makeServer(media: false)
+    @Test func mediaIsAccepted() async throws {
+        let server = try makeServer(media: true)
+        defer { server.stop() }
         let body = #"{"url":"https://example.com/v.m3u8","kind":"hls"}"#
-        let (absent, _) = try await send(store, "POST", "/media", body: body, bearer: token)
-        #expect(absent == 404)
-        store.stop()
-        let direct = try makeServer(media: true)
-        defer { direct.stop() }
-        let (present, _) = try await send(direct, "POST", "/media", body: body, bearer: token)
-        #expect(present == 201)
+        let (status, _) = try await send(server, "POST", "/media", body: body, bearer: token)
+        #expect(status == 201)
         #expect(delegate.received.last?.1 == true)
         #expect(delegate.received.last?.0.kind == "hls")
+        let off = try makeServer(media: false)
+        defer { off.stop() }
+        let (absent, _) = try await send(off, "POST", "/media", body: body, bearer: token)
+        #expect(absent == 404, "a build without the grabber still says so")
     }
 
     @Test func preflightIsAnswered() async throws {

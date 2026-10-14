@@ -7,7 +7,6 @@ struct SettingsView: View {
             GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }
             ConnectionSettings().tabItem { Label("Connections", systemImage: "network") }
             BrowserSettings().tabItem { Label("Browser", systemImage: "globe") }
-            ProView().tabItem { Label("Haul Pro", systemImage: "star") }
         }
         .frame(width: 520)
         .padding(.bottom, 8)
@@ -53,19 +52,16 @@ struct ConnectionSettings: View {
     @State private var portText = ""
 
     var body: some View {
-        let gate = model.gate
         Form {
             Section {
-                Stepper(value: Binding(get: { model.settings.connections }, set: { model.setConnections($0) }), in: 1...gate.maxConnections) {
+                Stepper(value: Binding(get: { model.settings.connections }, set: { model.setConnections($0) }), in: 1...Limits.maxConnections) {
                     LabeledContent("Connections per download", value: "\(model.settings.connections)")
                 }
-                Stepper(value: Binding(get: { model.settings.concurrent }, set: { model.setConcurrent($0) }), in: 1...gate.maxConcurrent) {
+                Stepper(value: Binding(get: { model.settings.concurrent }, set: { model.setConcurrent($0) }), in: 1...Limits.maxConcurrent) {
                     LabeledContent("Downloads at a time", value: "\(model.settings.concurrent)")
                 }
-                if !model.isPro {
-                    Text("Free: up to \(FeatureGate(edition: model.edition, isPro: false).maxConnections) connections and \(FeatureGate(edition: model.edition, isPro: false).maxConcurrent) downloads at a time. Haul Pro raises those to \(FeatureGate(edition: model.edition, isPro: true).maxConnections) and \(FeatureGate(edition: model.edition, isPro: true).maxConcurrent).")
-                        .font(.callout).foregroundStyle(.secondary)
-                }
+                Text("More connections help on fast servers; too many on a slow one only shares the same pipe thinner.")
+                    .font(.callout).foregroundStyle(.secondary)
             }
             Section("Browser extension server") {
                 LabeledContent("Port") {

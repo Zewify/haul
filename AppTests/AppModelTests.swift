@@ -16,23 +16,22 @@ final class AppModelTests: XCTestCase {
         try store.save(library)
     }
 
-    func testFreeSettingsAreClampedByTheGate() throws {
+    func testSettingsAreClampedToTheEngineLimits() throws {
         var library = store.load()
         library.settings.connections = 99
         library.settings.concurrent = 50
         try store.save(library)
         let model = AppModel(store: store)
-        XCTAssertFalse(model.isPro)
-        XCTAssertEqual(model.settings.connections, 4)
-        XCTAssertEqual(model.settings.concurrent, 2)
+        XCTAssertEqual(model.settings.connections, 32)
+        XCTAssertEqual(model.settings.concurrent, 8)
         model.setConnections(10)
-        XCTAssertEqual(model.engine.connections, 4)
+        XCTAssertEqual(model.engine.connections, 10)
     }
 
     func testPairingRecordsTheBrowserWhenApproved() async throws {
         let model = AppModel(store: store)
         model.pairingApprover = { _ in true }
-        let server = ExtensionServer(port: 0, token: "t", status: ServerStatus(version: "0", edition: .store, features: .init(media: false)), delegate: model)
+        let server = ExtensionServer(port: 0, token: "t", status: ServerStatus(version: "0"), delegate: model)
         let approved = await model.server(server, approvePairing: PairRequest(client: "chrome", name: "Chrome"))
         XCTAssertTrue(approved)
         XCTAssertEqual(model.settings.pairedClients.map(\.name), ["Chrome"])
@@ -44,7 +43,7 @@ final class AppModelTests: XCTestCase {
 
     func testAnUnreachableFileIsRefusedSoTheBrowserKeepsItsOwnDownload() async throws {
         let model = AppModel(store: store)
-        let server = ExtensionServer(port: 0, token: "t", status: ServerStatus(version: "0", edition: .store, features: .init(media: false)), delegate: model)
+        let server = ExtensionServer(port: 0, token: "t", status: ServerStatus(version: "0"), delegate: model)
         let incoming = IncomingDownload(url: "http://127.0.0.1:1/nothing.zip", filename: "nothing.zip")
         do {
             _ = try await model.server(server, receive: incoming, media: false)
@@ -57,11 +56,8 @@ final class AppModelTests: XCTestCase {
     }
 
     func testAStreamWaitsInThePanelWhenAskingIsOn() async throws {
-        UserDefaults.standard.set(true, forKey: "HaulForcePro")
-        defer { UserDefaults.standard.removeObject(forKey: "HaulForcePro") }
         let model = AppModel(store: store)
-        guard model.gate.allows(.mediaGrabber) else { throw XCTSkip("the store edition has no grabber") }
-        let server = ExtensionServer(port: 0, token: "t", status: ServerStatus(version: "0", edition: .direct, features: .init(media: true)), delegate: model)
+        let server = ExtensionServer(port: 0, token: "t", status: ServerStatus(version: "0"), delegate: model)
         let shown = expectation(description: "panel asked")
         model.onPending = { shown.fulfill() }
         _ = try await model.server(server, receive: IncomingDownload(url: "https://x/y.m3u8", kind: "hls", pageTitle: "A Clip"), media: true)
@@ -83,17 +79,6 @@ final class AppModelTests: XCTestCase {
         let other = PendingCatch(incoming: IncomingDownload(url: "https://x/b.zip"), media: false, name: "b.zip", folder: model.folder)
         model.startCatch(other)
         XCTAssertNil(model.engine.downloads.last?.folderBookmark, "the global folder has the app's own bookmark")
-    }
-
-    func testMediaNeedsPro() async throws {
-        let model = AppModel(store: store)
-        let server = ExtensionServer(port: 0, token: "t", status: ServerStatus(version: "0", edition: .store, features: .init(media: false)), delegate: model)
-        do {
-            _ = try await model.server(server, receive: IncomingDownload(url: "https://x/y.m3u8", kind: "hls"), media: true)
-            XCTFail("expected a refusal")
-        } catch ServerError.badRequest(let message) {
-            XCTAssertTrue(message.contains("Pro"))
-        }
     }
 
     func testFlushWritesTheLibrary() throws {

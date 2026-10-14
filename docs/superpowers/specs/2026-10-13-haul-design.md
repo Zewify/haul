@@ -5,6 +5,9 @@ It is a Zewify product, free with a one-time Pro unlock.
 
 ## Decisions (brainstorm, 2026-10-13)
 
+**Superseded on 2026-10-14:** the owner made Haul free and published from zewify.com only, like PortGlimpse.
+The Pro tier, licences, the Mac App Store edition and the edition flag below no longer exist; one build carries the grabber.
+
 The owner chose the first four; the rest are the recommendations they delegated before going to sleep, and each is open to change.
 
 - **A Zewify product for Mac.** Native Swift, same shape as TickThock and VoxMorph.

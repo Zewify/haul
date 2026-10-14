@@ -10,8 +10,7 @@ public final class DownloadEngine {
     public private(set) var downloads: [Download]
     /// Live progress of running downloads, by id.
     public private(set) var progress: [UUID: DownloadProgress] = [:]
-    public var gate: FeatureGate { didSet { pump() } }
-    /// User settings; the gate clamps them.
+    /// User settings; `Limits` clamps them.
     public var connections: Int
     public var concurrent: Int { didSet { pump() } }
     public var folder: URL
@@ -24,9 +23,8 @@ public final class DownloadEngine {
     @ObservationIgnored private let retryDelays: [TimeInterval]
     @ObservationIgnored private let log = Logger(subsystem: "com.zewify.haul", category: "engine")
 
-    public init(downloads: [Download], gate: FeatureGate, connections: Int, concurrent: Int, folder: URL,
+    public init(downloads: [Download], connections: Int, concurrent: Int, folder: URL,
                 retryDelays: [TimeInterval] = DownloadTask.defaultRetryDelays) {
-        self.gate = gate
         self.connections = connections
         self.concurrent = concurrent
         self.folder = folder
@@ -51,8 +49,8 @@ public final class DownloadEngine {
         return config
     }
 
-    public var effectiveConnections: Int { gate.clampConnections(connections) }
-    public var effectiveConcurrent: Int { gate.clampConcurrent(concurrent) }
+    public var effectiveConnections: Int { Limits.clampConnections(connections) }
+    public var effectiveConcurrent: Int { Limits.clampConcurrent(concurrent) }
 
     public func download(_ id: UUID) -> Download? { downloads.first { $0.id == id } }
     public func progress(for id: UUID) -> DownloadProgress? { progress[id] }

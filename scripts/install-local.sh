@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Builds a Debug Haul and installs it into /Applications for day-to-day testing, then launches it.
-#   ./scripts/install-local.sh [--direct]
+# Builds a Release Haul and installs it into /Applications, then launches it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-app=$(./scripts/build.sh Debug "$@" | tail -1)
-osascript -e 'quit app "Haul"' >/dev/null 2>&1 || true
+app=$(./scripts/build.sh Release | tail -1)
+pkill -x Haul >/dev/null 2>&1 || true
+sleep 1
 rm -rf /Applications/Haul.app
 cp -R "$app" /Applications/Haul.app
 open /Applications/Haul.app

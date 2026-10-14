@@ -2,6 +2,7 @@
 // extension, pairs it, opens the page, waits for playback traffic, prints what the sniffer found, grabs the first
 // HLS item (or the largest file), accepts Haul's catch panel with Return, and waits for a file to land.
 //   HAUL_CHROME=<chrome-for-testing-binary> node scripts/e2e-media.mjs <page-url> [seconds-to-watch]
+// Needs a running Haul.
 import { spawn, execFile } from 'node:child_process';
 import { mkdtempSync, rmSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
@@ -52,7 +53,7 @@ try {
   };
   const status = await ask({ type: 'status' });
   if (!status.connected) throw new Error('Haul is not answering on 48512');
-  if (!status.media) throw new Error('this Haul has no media grabber (store edition, or not Pro)');
+  if (!status.media) throw new Error('this Haul reports no media grabber');
   const approver = (async () => { for (let i = 0; i < 24; i++) { await sleep(500); if (await osa(allowScript) !== null) return true; } return false; })();
   const paired = await ask({ type: 'pair' });
   console.log('pair', JSON.stringify(paired), 'approver clicked:', await approver);

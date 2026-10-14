@@ -28,7 +28,6 @@ public struct Settings: Codable, Hashable, Sendable {
     public var openAtLogin: Bool
     public var pairingToken: String
     public var pairedClients: [PairedClient]
-    public var licenseKey: String?
 
     public init() {
         askBeforeStarting = true
@@ -50,7 +49,7 @@ public struct Settings: Codable, Hashable, Sendable {
     // Every key but the token has a default, so a file from an older version still loads.
     private enum CodingKeys: String, CodingKey {
         case downloadFolderPath, downloadFolderBookmark, askBeforeStarting, connections, concurrent, port, openAtLogin,
-             pairingToken, pairedClients, licenseKey
+             pairingToken, pairedClients
     }
 
     public init(from decoder: Decoder) throws {
@@ -65,7 +64,6 @@ public struct Settings: Codable, Hashable, Sendable {
         openAtLogin = try c.decodeIfPresent(Bool.self, forKey: .openAtLogin) ?? defaults.openAtLogin
         pairingToken = try c.decodeIfPresent(String.self, forKey: .pairingToken) ?? defaults.pairingToken
         pairedClients = try c.decodeIfPresent([PairedClient].self, forKey: .pairedClients) ?? []
-        licenseKey = try c.decodeIfPresent(String.self, forKey: .licenseKey)
     }
 }
 
