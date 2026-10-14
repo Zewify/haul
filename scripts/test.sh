@@ -5,7 +5,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ./scripts/check-identity.sh
-(cd Core && swift test --quiet)
+if [[ "${HAUL_SKIP_HOSTED:-}" == "1" ]]; then
+  # On CI, name every test as it runs, so a hang points at its culprit.
+  (cd Core && swift test 2>&1 | grep -E "^(◇|✔|✘)" | grep -vE "passed after|Test run" || true; cd Core && swift test --quiet)
+else
+  (cd Core && swift test --quiet)
+fi
 ./scripts/test-install.sh
 if [[ -d Extension/lib ]]; then (cd Extension && node --test lib/*.test.js >/dev/null); fi
 xcodegen generate --quiet

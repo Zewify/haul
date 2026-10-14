@@ -51,8 +51,14 @@ final class TestServer: @unchecked Sendable {
         }
         listener.newConnectionHandler = { [weak self] connection in self?.serve(connection) }
         listener.start(queue: queue)
-        ready.wait()
+        // Never wait forever: a runner without a usable loopback interface must fail the test, not hang the job.
+        guard ready.wait(timeout: .now() + 10) == .success, port != 0 else {
+            listener.cancel()
+            throw TestServerError.notReady(String(describing: listener.state))
+        }
     }
+
+    enum TestServerError: Error { case notReady(String) }
 
     deinit { listener.cancel() }
 
