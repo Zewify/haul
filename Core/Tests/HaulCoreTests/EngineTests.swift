@@ -219,7 +219,7 @@ struct EngineTests {
         #expect(engine.download(a) == nil)
     }
 
-    @Test func dashDownloadsJoinVideoAndAudioIntoOneFile() async throws {
+    @Test(.enabled(if: avAvailable, "needs a media session")) func dashDownloadsJoinVideoAndAudioIntoOneFile() async throws {
         let fixtures = folder.appendingPathComponent("fixtures", isDirectory: true)
         try FileManager.default.createDirectory(at: fixtures, withIntermediateDirectories: true)
         try Fixtures.videoOnly(at: fixtures.appendingPathComponent("v.mp4"))
@@ -243,7 +243,7 @@ struct EngineTests {
         #expect(leftovers.isEmpty, "\(leftovers)")
     }
 
-    @Test func aDashPairWhoseFirstTrackAlreadyHasSoundIsKeptAsIs() async throws {
+    @Test(.enabled(if: avAvailable, "needs a media session")) func aDashPairWhoseFirstTrackAlreadyHasSoundIsKeptAsIs() async throws {
         let fixtures = folder.appendingPathComponent("fixtures3", isDirectory: true)
         try FileManager.default.createDirectory(at: fixtures, withIntermediateDirectories: true)
         try Fixtures.videoOnly(at: fixtures.appendingPathComponent("v.mp4"))
@@ -264,7 +264,7 @@ struct EngineTests {
         #expect(server.requests.filter { $0.path == "/a.mp4" }.isEmpty, "the audio track is not fetched when the first already has sound")
     }
 
-    @Test func aDashPairWithNoSoundAnywhereFailsClearly() async throws {
+    @Test(.enabled(if: avAvailable, "needs a media session")) func aDashPairWithNoSoundAnywhereFailsClearly() async throws {
         let fixtures = folder.appendingPathComponent("fixtures4", isDirectory: true)
         try FileManager.default.createDirectory(at: fixtures, withIntermediateDirectories: true)
         try Fixtures.videoOnly(at: fixtures.appendingPathComponent("v.mp4"))
@@ -279,7 +279,7 @@ struct EngineTests {
         #expect(message.contains("no sound"))
     }
 
-    @Test func aFinishedMediaFileWithoutSoundIsNoted() async throws {
+    @Test(.enabled(if: avAvailable, "needs a media session")) func aFinishedMediaFileWithoutSoundIsNoted() async throws {
         let fixtures = folder.appendingPathComponent("fixtures2", isDirectory: true)
         try FileManager.default.createDirectory(at: fixtures, withIntermediateDirectories: true)
         try Fixtures.videoOnly(at: fixtures.appendingPathComponent("silent.mp4"))

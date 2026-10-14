@@ -37,6 +37,7 @@ jobs:
       - name: Test
         env:
           HAUL_SKIP_HOSTED: "1"
+          HAUL_SKIP_AV: "1"
         run: ./scripts/test.sh
       - name: Package
         run: ./scripts/package.sh

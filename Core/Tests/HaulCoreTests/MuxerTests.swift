@@ -4,6 +4,10 @@ import Foundation
 import Testing
 @testable import HaulCore
 
+/// AVFoundation encoding and exporting need a media session; a virtualised CI Mac has none and blocks forever,
+/// so the tests that need them run only where HAUL_SKIP_AV is unset.
+let avAvailable = ProcessInfo.processInfo.environment["HAUL_SKIP_AV"] != "1"
+
 /// Makes the kind of files a DASH site serves: a video-only MP4 and an audio-only MP4, one second each.
 enum Fixtures {
     static func videoOnly(at url: URL, width: Int = 64, height: Int = 48, seconds: Double = 1) throws {
@@ -25,13 +29,14 @@ enum Fixtures {
             CVPixelBufferLockBaseAddress(buffer, [])
             memset(CVPixelBufferGetBaseAddress(buffer), Int32(frame * 20 & 255), CVPixelBufferGetDataSize(buffer))
             CVPixelBufferUnlockBaseAddress(buffer, [])
-            while !input.isReadyForMoreMediaData { Thread.sleep(forTimeInterval: 0.01) }
+            var waited = 0
+            while !input.isReadyForMoreMediaData { Thread.sleep(forTimeInterval: 0.01); waited += 1; if waited > 1000 { throw DownloadFailure("video fixture: the encoder never became ready") } }
             adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: 10))
         }
         input.markAsFinished()
         let done = DispatchSemaphore(value: 0)
         writer.finishWriting { done.signal() }
-        done.wait()
+        guard done.wait(timeout: .now() + 30) == .success else { throw DownloadFailure("video fixture: the encoder never finished") }
         guard writer.status == .completed else { throw writer.error ?? DownloadFailure("video fixture failed") }
     }
 
@@ -60,17 +65,19 @@ enum Fixtures {
             var sample: CMSampleBuffer?
             CMAudioSampleBufferCreateReadyWithPacketDescriptions(allocator: nil, dataBuffer: block!, formatDescription: format!, sampleCount: framesPerChunk,
                                                                  presentationTimeStamp: CMTime(value: CMTimeValue(chunk * framesPerChunk), timescale: 44100), packetDescriptions: nil, sampleBufferOut: &sample)
-            while !input.isReadyForMoreMediaData { Thread.sleep(forTimeInterval: 0.01) }
+            var waited = 0
+            while !input.isReadyForMoreMediaData { Thread.sleep(forTimeInterval: 0.01); waited += 1; if waited > 1000 { throw DownloadFailure("audio fixture: the encoder never became ready") } }
             input.append(sample!)
         }
         input.markAsFinished()
         let done = DispatchSemaphore(value: 0)
         writer.finishWriting { done.signal() }
-        done.wait()
+        guard done.wait(timeout: .now() + 30) == .success else { throw DownloadFailure("audio fixture: the encoder never finished") }
         guard writer.status == .completed else { throw writer.error ?? DownloadFailure("audio fixture failed") }
     }
 }
 
+@Suite(.enabled(if: avAvailable, "needs a media session"))
 struct MuxerTests {
     let folder: URL
 

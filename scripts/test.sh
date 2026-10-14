@@ -6,8 +6,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ./scripts/check-identity.sh
 if [[ "${HAUL_SKIP_HOSTED:-}" == "1" ]]; then
-  # On CI, name every test as it runs, so a hang points at its culprit.
-  (cd Core && swift test 2>&1 | grep -E "^(◇|✔|✘)" | grep -vE "passed after|Test run" || true; cd Core && swift test --quiet)
+  # On CI, run the suites one at a time and name each first, so a hang in the log points at its culprit.
+  (cd Core && swift build --build-tests --quiet)
+  for suite in $(grep -hoE "^(struct|final class) [A-Za-z]+Tests\b" Core/Tests/HaulCoreTests/*.swift | awk '{print $NF}' | sort -u); do
+    echo "== $suite"
+    (cd Core && swift test --skip-build --filter "^$suite/" --quiet)
+  done
 else
   (cd Core && swift test --quiet)
 fi
