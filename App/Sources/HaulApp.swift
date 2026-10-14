@@ -66,34 +66,26 @@ struct MenuBarIcon: View {
 }
 
 enum MenuBarGlyph {
-    /// Menu bar icons are 18 points tall. Drawn on demand, so it stays sharp at whatever scale the display uses.
+    /// Menu bar icons are 18 points tall; the app icon's tile fills that once its transparent margin is cropped.
+    /// Drawn on demand from the icon itself, as TickThock does, so it is the icon and stays sharp at any scale.
     static func make(fraction: Double?) -> NSImage {
         let size = NSSize(width: 18, height: 18)
+        let icon = NSApp.applicationIconImage ?? NSImage()
         let image = NSImage(size: size, flipped: false) { rect in
-            let tile = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 4, yRadius: 4)
-            NSColor(srgbRed: 0x1E / 255, green: 0x1B / 255, blue: 0x22 / 255, alpha: 1).setFill()
-            tile.fill()
-            let blue = NSColor(srgbRed: 0x10 / 255, green: 0x98 / 255, blue: 0xF4 / 255, alpha: 1)
-            let lit = fraction.map { max(1, Int(($0 * 4).rounded(.up))) } ?? 4
-            // The shaft: four segments from the top, in the icon's proportions.
-            let width: CGFloat = 3.2, height: CGFloat = 1.6, gap: CGFloat = 0.6, x: CGFloat = 9 - 1.6
-            for index in 0..<4 {
-                let y = 15.3 - CGFloat(index) * (height + gap)
-                blue.withAlphaComponent(index < lit ? 1 : 0.35).setFill()
-                NSBezierPath(roundedRect: NSRect(x: x, y: y, width: width, height: height), xRadius: 0.5, yRadius: 0.5).fill()
+            // The icon's squircle spans 100...924 of its 1024-point canvas.
+            let tile = NSRect(x: icon.size.width * 100 / 1024, y: icon.size.height * 100 / 1024,
+                              width: icon.size.width * 824 / 1024, height: icon.size.height * 824 / 1024)
+            icon.draw(in: rect, from: tile, operation: .sourceOver, fraction: 1)
+            if let fraction {
+                // Progress: a thin bar along the tile's bottom edge, inside its rounded corner.
+                let track = NSRect(x: 4, y: 1.5, width: rect.width - 8, height: 1.5)
+                NSColor.white.withAlphaComponent(0.25).setFill()
+                NSBezierPath(roundedRect: track, xRadius: 0.75, yRadius: 0.75).fill()
+                var done = track
+                done.size.width = max(1.5, track.width * CGFloat(min(1, max(0, fraction))))
+                NSColor(srgbRed: 0x10 / 255, green: 0x98 / 255, blue: 0xF4 / 255, alpha: 1).setFill()
+                NSBezierPath(roundedRect: done, xRadius: 0.75, yRadius: 0.75).fill()
             }
-            // The arrowhead below it.
-            let head = NSBezierPath()
-            head.move(to: NSPoint(x: 4.6, y: 8.1))
-            head.line(to: NSPoint(x: 13.4, y: 8.1))
-            head.line(to: NSPoint(x: 9, y: 3.4))
-            head.close()
-            head.lineJoinStyle = .round
-            head.lineWidth = 0.9
-            blue.setFill()
-            blue.setStroke()
-            head.fill()
-            head.stroke()
             return true
         }
         image.isTemplate = false
