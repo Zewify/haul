@@ -1,11 +1,12 @@
 // End-to-end check of the Chrome extension against a running Haul: launches a throwaway Chrome with the
 // extension loaded, pairs it (clicking Allow in Haul through System Events), clicks a file link on a test page,
-// accepts Haul's catch panel with Return, and waits for the file to land.
+// presses Start in Haul's catch panel, and waits for the file to land.
 //   HAUL_CHROME=<chrome-for-testing-binary> node scripts/e2e-chrome.mjs <test-page-url> <expected-file-in-~/Downloads>
 import { spawn, execFile } from 'node:child_process';
 import { existsSync, statSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
+import { pressStart } from './catch-panel.mjs';
 
 const [pageURL, expectedName] = process.argv.slice(2);
 if (!pageURL || !expectedName) { console.error('usage: e2e-chrome.mjs <page-url> <expected-file>'); process.exit(2); }
@@ -89,11 +90,8 @@ try {
   };
   const clicked = await run(`(() => { const a = document.getElementById('file'); a.click(); return a.href; })()`);
   console.log('clicked', clicked);
-  // Haul asks before starting: the catch panel is key; Return starts it.
-  await sleep(2500);
-  await osa('tell application "Haul" to activate');
-  await sleep(300);
-  await osa('tell application "System Events" to keystroke return');
+  // Haul asks before starting, in its catch panel.
+  if (!(await pressStart())) throw new Error('the catch panel never offered Start');
   const file = join(homedir(), 'Downloads', expectedName);
   let done = false;
   for (let i = 0; i < 120; i++) { await sleep(500); if (existsSync(file)) { done = true; break; } }

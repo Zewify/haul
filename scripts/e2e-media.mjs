@@ -1,12 +1,13 @@
-// End-to-end check of the direct edition's media grabber against a real page: launches a throwaway Chrome with the
-// extension, pairs it, opens the page, waits for playback traffic, prints what the sniffer found, grabs the first
-// HLS item (or the largest file), accepts Haul's catch panel with Return, and waits for a file to land.
+// End-to-end check of the media grabber against a real page: launches a throwaway Chrome with the extension, pairs
+// it, opens the page, starts playback, prints what the sniffer found, grabs the best item, presses Start in Haul's
+// catch panel, and follows the new download in Haul's own library until it finishes, failing on a silent result.
 //   HAUL_CHROME=<chrome-for-testing-binary> node scripts/e2e-media.mjs <page-url> [seconds-to-watch]
 // Needs a running Haul.
 import { spawn, execFile } from 'node:child_process';
-import { mkdtempSync, rmSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
+import { pressStart } from './catch-panel.mjs';
 
 const [pageURL, watchArg] = process.argv.slice(2);
 if (!pageURL) { console.error('usage: e2e-media.mjs <page-url> [seconds]'); process.exit(2); }
@@ -19,6 +20,8 @@ const chrome = spawn(binary, [`--user-data-dir=${profile}`, `--load-extension=${
   '--no-first-run', '--no-default-browser-check', '--autoplay-policy=no-user-gesture-required', 'about:blank'], { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const osa = (script) => new Promise((resolve) => execFile('osascript', ['-e', script], (e, out) => resolve(e ? null : out.trim())));
+const libraryPath = join(homedir(), 'Library/Containers/com.zewify.haul/Data/Library/Application Support/Haul/library.json');
+const library = () => { try { return JSON.parse(readFileSync(libraryPath, 'utf8')).downloads || []; } catch { return []; } };
 const allowScript = 'tell application "System Events" to tell process "Haul"\nset clicked to false\nrepeat with w in windows\nif exists button "Allow" of w then\nclick button "Allow" of w\nset clicked to true\nend if\nend repeat\nif not clicked then error "no alert"\nend tell';
 
 async function targets() { try { return await (await fetch(`http://127.0.0.1:${port}/json`)).json(); } catch { return []; } }
@@ -33,7 +36,6 @@ function connect(target) {
   const ready = new Promise((r) => ws.addEventListener('open', r));
   return { ready, send: (method, params = {}) => new Promise((r) => { const n = ++id; pending.set(n, r); ws.send(JSON.stringify({ id: n, method, params })); }), close: () => ws.close() };
 }
-const snapshot = () => Object.fromEntries(readdirSync(join(homedir(), 'Downloads')).map((f) => [f, statSync(join(homedir(), 'Downloads', f)).size]));
 
 let failed = false;
 try {
@@ -65,41 +67,46 @@ try {
   const page = connect(pageTarget); await page.ready;
   await page.send('Page.navigate', { url: pageURL });
   console.log(`watching ${pageURL} for ${watchSeconds}s`);
+  await sleep(5000);
+  // Muted playback may start on its own; a click on the player is what a person would do otherwise.
+  const play = `(() => { const v = [...document.querySelectorAll('video')]; v.forEach((x) => { x.muted = true; x.play().catch(() => {}); });
+    const b = document.querySelector('[aria-label*="Play" i], button[class*="play" i], .vjs-big-play-button'); if (b && !v.some((x) => !x.paused)) b.click();
+    return v.filter((x) => !x.paused).length + ' of ' + v.length + ' video element(s) playing'; })()`;
+  console.log('playback:', (await page.send('Runtime.evaluate', { expression: play, returnByValue: true })).result?.result?.value);
   await sleep(watchSeconds * 1000);
   const tabs = await session.send('Runtime.evaluate', { expression: `chrome.tabs.query({}).then(t => JSON.stringify(t.map(x => ({id: x.id, url: x.url, title: x.title}))))`, awaitPromise: true, returnByValue: true });
-  const tab = JSON.parse(tabs.result.result.value).find((t) => t.url && t.url.startsWith(pageURL.split('?')[0].slice(0, 30)));
+  // Two tabs exist: the extension's popup page and the page under test, whatever its URL has become since.
+  const tab = JSON.parse(tabs.result.result.value).find((t) => t.url && !t.url.startsWith('chrome-extension:') && t.url !== 'about:blank');
   if (!tab) throw new Error('could not find the page tab');
   console.log('page title:', tab.title, '| url:', tab.url);
   const state = await ask({ type: 'status', tabId: tab.id, tabUrl: tab.url });
   console.log(`sniffed ${state.items.length} item(s):`);
   for (const item of state.items) console.log(`  ${item.kind}  ${item.label || item.contentType || '-'}  ${item.size || '?'}  ${item.url.slice(0, 100)}`);
-  const pick = state.items.find((i) => i.kind === 'page') || state.items.find((i) => i.kind === 'dash' && /^This video/.test(i.label || '')) || state.items.find((i) => i.kind === 'dash') || state.items.find((i) => i.kind === 'hls')
-    || state.items.filter((i) => i.kind === 'file').sort((a, b) => (b.size || 0) - (a.size || 0))[0];
+  const pick = state.items.find((i) => i.kind === 'page') || state.items.find((i) => i.kind === 'dash' && /^This video/.test(i.label || '')) || state.items.find((i) => i.kind === 'dash')
+    || state.items.find((i) => i.kind === 'hls' || i.kind === 'mpd') || state.items.filter((i) => i.kind === 'file').sort((a, b) => (b.size || 0) - (a.size || 0))[0];
   if (!pick) throw new Error('nothing to grab');
   console.log('grabbing', pick.kind, pick.url.slice(0, 120));
-  const before = snapshot();
+  const before = new Set(library().map((d) => d.id));
   const grabbed = await ask({ type: 'grab', item: pick, referrer: tab.url, pageTitle: tab.title });
   console.log('grab', JSON.stringify(grabbed));
   if (!grabbed.ok) throw new Error('grab refused');
-  await sleep(2500);
-  await osa('tell application "Haul" to activate');
-  await sleep(300);
-  await osa('tell application "System Events" to keystroke return');
-  let landed = null;
-  let lastSize = -1, stableFor = 0;
-  for (let i = 0; i < 300; i++) {
+  if (!(await pressStart())) throw new Error('the catch panel never offered Start (its error, if any, is on screen)');
+  let download = null;
+  for (let i = 0; i < 600; i++) {
     await sleep(1000);
-    const now = snapshot();
-    // A DASH grab writes "(video)" and "(audio)" parts first; only the joined file counts, once it stops growing.
-    const fresh = Object.keys(now).filter((f) => !(f in before) && !f.endsWith('.haulpart') && !/ \((video|audio)\)\.mp4$/.test(f));
-    if (!fresh.length) continue;
-    const size = now[fresh[0]];
-    stableFor = size === lastSize ? stableFor + 1 : 0;
-    lastSize = size;
-    if (stableFor >= 2) { landed = fresh.map((f) => `${f} (${now[f]} bytes)`); break; }
+    download = library().find((d) => !before.has(d.id));
+    const state = download && Object.keys(download.state)[0];
+    if (state === 'finished') {
+      // Haul inspects a finished grab and notes a silent one a moment later.
+      await sleep(3000);
+      download = library().find((d) => d.id === download.id);
+      break;
+    }
+    if (state === 'failed' || state === 'cancelled') throw new Error(`Haul ${state} it: ${JSON.stringify(download.state)}`);
   }
-  if (!landed) throw new Error('no finished file appeared in ~/Downloads within 4 minutes');
-  console.log('landed', landed.join(', '));
+  if (!download || !download.state.finished) throw new Error('the download did not finish within 10 minutes');
+  console.log('landed', download.finalPath, `(${download.size} bytes)`, download.mediaNote ? `· ${download.mediaNote}` : '');
+  if (download.mediaNote) throw new Error(`the file is not whole: ${download.mediaNote}`);
   console.log('PASS');
   page.close(); session.close();
 } catch (error) {
