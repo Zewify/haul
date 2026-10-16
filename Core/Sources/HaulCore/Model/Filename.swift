@@ -94,11 +94,11 @@ public enum Filename {
         }
         title = title.replacingOccurrences(of: " | ", with: " - ").replacingOccurrences(of: " – ", with: " - ")
         let base = sanitised(title)
-        guard let ext, ext != "m3u8" else { return base }
+        guard let ext, ext != "m3u8", ext != "mpd" else { return base }
         return base.lowercased().hasSuffix("." + ext) ? base : base + "." + ext
     }
 
-    static func fileExtension(for contentType: String?) -> String? {
+    public static func fileExtension(for contentType: String?) -> String? {
         switch contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() {
         case "video/mp4", "video/x-m4v": "mp4"
         case "video/webm": "webm"

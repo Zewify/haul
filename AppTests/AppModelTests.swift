@@ -4,8 +4,9 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
-    var folder: URL!
-    var store: LibraryStore!
+    // Set up in the nonisolated setUpWithError, before any test touches them.
+    nonisolated(unsafe) var folder: URL!
+    nonisolated(unsafe) var store: LibraryStore!
 
     override func setUpWithError() throws {
         folder = FileManager.default.temporaryDirectory.appendingPathComponent("haul-app-\(UUID().uuidString)")
@@ -56,15 +57,51 @@ final class AppModelTests: XCTestCase {
     }
 
     func testAStreamWaitsInThePanelWhenAskingIsOn() async throws {
+        let site = try TestServer()
+        site["/y.m3u8"] = .init(data: Data("#EXTM3U\n#EXTINF:4,\na.ts\n#EXT-X-ENDLIST\n".utf8), contentType: "application/vnd.apple.mpegurl")
         let model = AppModel(store: store)
         let server = ExtensionServer(port: 0, token: "t", status: ServerStatus(version: "0"), delegate: model)
         let shown = expectation(description: "panel asked")
         model.onPending = { shown.fulfill() }
-        _ = try await model.server(server, receive: IncomingDownload(url: "https://x/y.m3u8", kind: "hls", pageTitle: "A Clip"), media: true)
+        _ = try await model.server(server, receive: IncomingDownload(url: site.url("/y.m3u8").absoluteString, kind: "hls", pageTitle: "A Clip"), media: true)
         await fulfillment(of: [shown], timeout: 5)
         XCTAssertEqual(model.pending.first?.name, "A Clip")
         model.dismissCatch(model.pending.first!)
         XCTAssertTrue(model.pending.isEmpty)
+    }
+
+    func testAProtectedStreamIsRefusedInPlainWords() async throws {
+        let site = try TestServer()
+        let mpd = #"<MPD type="static" mediaPresentationDuration="PT5S"><Period><AdaptationSet mimeType="video/mp4"><ContentProtection value="cenc"/><Representation id="v" codecs="avc1.64001f" bandwidth="1"/></AdaptationSet></Period></MPD>"#
+        site["/m.mpd"] = .init(data: Data(mpd.utf8), contentType: "application/dash+xml")
+        let model = AppModel(store: store)
+        let server = ExtensionServer(port: 0, token: "t", status: ServerStatus(version: "0"), delegate: model)
+        do {
+            _ = try await model.server(server, receive: IncomingDownload(url: site.url("/m.mpd").absoluteString, kind: "mpd", pageTitle: "Locked"), media: true)
+            XCTFail("expected a refusal")
+        } catch ServerError.badRequest(let message) {
+            XCTAssertEqual(message, "This video is protected (DRM) and cannot be saved.")
+        }
+        XCTAssertTrue(model.pending.isEmpty)
+    }
+
+    /// A DASH site that serves each track as one file goes through the segmented file engine, as Facebook's tracks do.
+    func testADASHManifestOfWholeFilesBecomesAJoinedDownload() async throws {
+        let site = try TestServer()
+        let mpd = #"<MPD type="static" mediaPresentationDuration="PT5S"><Period><AdaptationSet mimeType="video/mp4"><Representation id="v" codecs="avc1.64001f" height="720" bandwidth="2"><BaseURL>v.mp4</BaseURL></Representation></AdaptationSet><AdaptationSet mimeType="audio/mp4"><Representation id="a" codecs="mp4a.40.2" bandwidth="1"><BaseURL>a.m4a</BaseURL></Representation></AdaptationSet></Period></MPD>"#
+        site["/m.mpd"] = .init(data: Data(mpd.utf8), contentType: "application/dash+xml")
+        site["/v.mp4"] = .init(data: Data(count: 100), contentType: "video/mp4")
+        let model = AppModel(store: store)
+        let server = ExtensionServer(port: 0, token: "t", status: ServerStatus(version: "0"), delegate: model)
+        let shown = expectation(description: "panel asked")
+        model.onPending = { shown.fulfill() }
+        _ = try await model.server(server, receive: IncomingDownload(url: site.url("/m.mpd").absoluteString, kind: "mpd", pageTitle: "Whole"), media: true)
+        await fulfillment(of: [shown], timeout: 5)
+        let pending = try XCTUnwrap(model.pending.first)
+        XCTAssertEqual(pending.kind, .dash)
+        XCTAssertEqual(pending.incoming.url, site.url("/v.mp4").absoluteString)
+        XCTAssertEqual(pending.incoming.audioUrl, site.url("/a.m4a").absoluteString)
+        XCTAssertEqual(pending.name, "Whole.mp4")
     }
 
     func testACatchToAChosenFolderCarriesABookmark() throws {

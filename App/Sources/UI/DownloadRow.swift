@@ -62,7 +62,7 @@ struct DownloadRow: View {
         switch download.state {
         case .finished: Format.size(download.size)
         case .downloading, .probing:
-            download.kind == .hls
+            download.kind.isStream
                 ? "\(download.mediaDone ?? 0) / \(download.mediaTotal ?? 0)"
                 : "\(Format.size(download.bytesReceived)) / \(Format.size(download.size))"
         default: download.size.map { "\(Format.size(download.bytesReceived)) / \(Format.size($0))" } ?? Format.size(download.bytesReceived)
@@ -76,7 +76,7 @@ struct DownloadRow: View {
         case .downloading:
             [Format.percent(download.fraction), Format.speed(progress?.bytesPerSecond ?? 0),
              (progress?.eta).map { "\(Format.eta($0)) left" } ?? "",
-             download.kind == .hls ? "stream" : download.kind == .dash ? "part \(min((download.mediaDone ?? 0) + 1, 2)) of 2 · \(download.segments.filter { !$0.isComplete }.count) connections" : "\(download.segments.filter { !$0.isComplete }.count) connections"]
+             download.kind.isStream ? (download.mediaTrack == nil ? "stream" : "stream · \(download.mediaTrack == 0 ? "video" : "audio") track") : download.kind == .dash ? "part \(min((download.mediaDone ?? 0) + 1, 2)) of 2 · \(download.segments.filter { !$0.isComplete }.count) connections" : "\(download.segments.filter { !$0.isComplete }.count) connections"]
                 .filter { !$0.isEmpty }.joined(separator: " · ")
         case .paused: "Paused" + (download.fraction.map { " · \(Format.percent($0))" } ?? "")
         case .finished:

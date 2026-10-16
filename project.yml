@@ -125,6 +125,8 @@ targets:
       Release: App/Signing.xcconfig
     sources:
       - path: AppTests
+      # The core's loopback test server, so app tests can serve real playlists and files.
+      - path: Core/Tests/HaulCoreTests/TestServer.swift
     dependencies:
       - target: Haul
     settings:

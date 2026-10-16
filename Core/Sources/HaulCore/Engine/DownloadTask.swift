@@ -12,9 +12,10 @@ public struct DownloadProgress: Sendable, Hashable {
     public var mediaDone: Int?
     public var mediaTotal: Int?
     public var mediaOffset: Int64?
+    public var mediaTrack: Int?
 
     public init(state: DownloadState, bytes: Int64, total: Int64?, segments: [Segment], bytesPerSecond: Double, eta: TimeInterval?,
-                mediaDone: Int? = nil, mediaTotal: Int? = nil, mediaOffset: Int64? = nil) {
+                mediaDone: Int? = nil, mediaTotal: Int? = nil, mediaOffset: Int64? = nil, mediaTrack: Int? = nil) {
         self.state = state
         self.bytes = bytes
         self.total = total
@@ -24,6 +25,7 @@ public struct DownloadProgress: Sendable, Hashable {
         self.mediaDone = mediaDone
         self.mediaTotal = mediaTotal
         self.mediaOffset = mediaOffset
+        self.mediaTrack = mediaTrack
     }
 }
 

@@ -12,7 +12,7 @@ struct SegmentMap: View {
                 Capsule().fill(Color.primary.opacity(0.08))
                 if download.state == .finished {
                     Capsule().fill(Color.accentColor.opacity(0.6))
-                } else if download.kind == .hls, let fraction = download.fraction {
+                } else if download.kind.isStream, let fraction = download.fraction {
                     Capsule().fill(Color.accentColor).frame(width: max(0, width * fraction))
                 } else if let size = download.size, size > 0 {
                     ForEach(Array(download.segments.enumerated()), id: \.offset) { _, segment in

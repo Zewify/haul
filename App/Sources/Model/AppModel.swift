@@ -13,10 +13,13 @@ struct PendingCatch: Identifiable, Sendable {
     var folder: URL
     var probe: ProbeResult?
     var error: String?
+    /// The error is about the stream itself (protected, live, nothing a Mac plays), not about reaching it.
+    var streamError = false
     var context: RequestContext { incoming.context }
     var kind: DownloadKind {
         switch incoming.kind {
         case "hls": .hls
+        case "mpd": .mpd
         case "dash": .dash
         default: .file
         }
@@ -224,6 +227,7 @@ final class AppModel {
     }
 
     static func describe(_ error: Error) -> String {
+        if let failure = error as? DownloadFailure { return failure.message }
         if let probe = error as? ProbeError {
             switch probe {
             case .status(let code): return "the server answered \(code)"
@@ -262,14 +266,29 @@ final class AppModel {
 
     /// Builds the catch for an incoming download: for a file, a probe for its real name and size; for a stream, the page title.
     private func makeCatch(_ incoming: IncomingDownload, media: Bool) async -> PendingCatch {
-        let kind: DownloadKind = incoming.kind == "hls" ? .hls : .file
         var pending = PendingCatch(incoming: incoming, media: media, name: "", folder: folder)
+        let kind = pending.kind
         guard let url = URL(string: incoming.url) else {
             pending.error = "Not a URL"
             return pending
         }
-        if kind == .hls {
+        if kind.isStream {
             pending.name = Filename.mediaName(pageTitle: incoming.pageTitle ?? "Stream", url: url, contentType: nil)
+            // Read the playlist or manifest now, so a protected or live stream says so before anything is queued.
+            do {
+                let plan = try await StreamSource.plan(kind, url: url, fetcher: MediaFetcher(context: incoming.context, session: session, retryDelays: [1]))
+                // A DASH site that serves each track as one whole file gets the segmented file engine instead.
+                if kind == .mpd, let video = plan.video.wholeFile {
+                    var whole = incoming
+                    whole.url = video.absoluteString
+                    whole.audioUrl = plan.audio?.wholeFile?.absoluteString
+                    whole.kind = whole.audioUrl == nil ? "file" : "dash"
+                    if plan.audio == nil || whole.audioUrl != nil { return await makeCatch(whole, media: media) }
+                }
+            } catch {
+                pending.error = Self.describe(error)
+                pending.streamError = true
+            }
             return pending
         }
         if incoming.kind == "page" {
@@ -307,6 +326,10 @@ final class AppModel {
                 pending.name = Filename.mediaName(pageTitle: incoming.pageTitle, url: probe.finalURL, contentType: probe.contentType, videoId: incoming.videoId)
             } else {
                 pending.name = probe.suggestedName
+            }
+            // Grabbed media that a server names without an extension ("it asks") would not open by double-click.
+            if media, (pending.name as NSString).pathExtension.isEmpty, let ext = Filename.fileExtension(for: probe.contentType) {
+                pending.name += "." + ext
             }
         } catch {
             pending.error = Self.describe(error)
@@ -363,7 +386,7 @@ extension AppModel: ExtensionServerDelegate {
         let pending = await makeCatch(download, media: media)
         if let error = pending.error {
             // Refused, so the browser keeps its own download rather than ending up with neither.
-            throw ServerError.badRequest("Haul could not reach the file: \(error)")
+            throw ServerError.badRequest(pending.streamError ? error : "Haul could not reach the file: \(error)")
         }
         if settings.askBeforeStarting {
             self.pending.append(pending)

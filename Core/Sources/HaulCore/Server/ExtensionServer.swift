@@ -10,7 +10,7 @@ public struct IncomingDownload: Codable, Sendable, Hashable {
     public var cookies: String?
     public var userAgent: String?
     public var headers: [String: String]?
-    /// `file`, `hls` or `dash`; only on `/media`.
+    /// `file`, `hls`, `mpd`, `dash` or `page`; only on `/media`.
     public var kind: String?
     public var pageTitle: String?
     /// For `dash`: the audio track; `url` is the video track.

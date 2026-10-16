@@ -124,7 +124,7 @@ public final class DownloadEngine {
         if deleteFile, let path = download.finalPath {
             try? FileManager.default.removeItem(atPath: path)
         }
-        if let part = download.partPath {
+        for part in [download.partPath].compactMap({ $0 }) + download.trackPartPaths {
             try? FileManager.default.removeItem(atPath: part)
         }
         downloads.remove(at: index)
@@ -165,8 +165,9 @@ public final class DownloadEngine {
         if let task = tasks[id] {
             Task { await task.cancel() }
         } else if downloads[index].state != .finished {
-            if let part = downloads[index].partPath { try? FileManager.default.removeItem(atPath: part) }
+            for part in [downloads[index].partPath].compactMap({ $0 }) + downloads[index].trackPartPaths { try? FileManager.default.removeItem(atPath: part) }
             downloads[index].segments = []
+            downloads[index].mediaTrack = nil
             downloads[index].state = .cancelled
             changed()
         }
@@ -208,8 +209,8 @@ public final class DownloadEngine {
                 let result = await task.run()
                 self?.finished(id, with: result)
             }
-        case .hls:
-            let task = HLSTask(download: downloads[index], session: session, retryDelays: retryDelays, onProgress: onProgress)
+        case .hls, .mpd:
+            let task = StreamTask(download: downloads[index], session: session, retryDelays: retryDelays, onProgress: onProgress)
             tasks[id] = task
             runners[id] = Task { [weak self] in
                 let result = await task.run()
@@ -233,6 +234,7 @@ public final class DownloadEngine {
         downloads[index].mediaDone = progress.mediaDone
         downloads[index].mediaTotal = progress.mediaTotal
         downloads[index].mediaOffset = progress.mediaOffset
+        downloads[index].mediaTrack = progress.mediaTrack
         if downloads[index].state.isRunning || progress.state.isRunning {
             downloads[index].state = progress.state
         }
@@ -282,5 +284,5 @@ protocol Pausable: Sendable {
 }
 
 extension DownloadTask: Pausable {}
-extension HLSTask: Pausable {}
+extension StreamTask: Pausable {}
 extension DashTask: Pausable {}

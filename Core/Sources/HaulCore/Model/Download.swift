@@ -78,6 +78,11 @@ public enum DownloadKind: String, Codable, Sendable {
     case file, hls
     /// A video track and an audio track from a DASH site, downloaded separately and joined into one file.
     case dash
+    /// A DASH manifest (MPD): the segments of its best video and audio, fetched like HLS and joined.
+    case mpd
+
+    /// HLS or a DASH manifest: fetched segment by segment from a playlist, counted in segments.
+    public var isStream: Bool { self == .hls || self == .mpd }
 }
 
 /// One download, as the library stores it. Everything the engine needs to resume it is here.
@@ -105,10 +110,12 @@ public struct Download: Codable, Identifiable, Hashable, Sendable {
     public var partPath: String?
     /// The finished file.
     public var finalPath: String?
-    /// For an HLS download: segments saved, segments in the stream, and the byte the next segment goes at.
+    /// For a stream: segments saved, segments in the stream, and the byte the next segment goes at in the current part.
     public var mediaDone: Int?
     public var mediaTotal: Int?
     public var mediaOffset: Int64?
+    /// For a stream whose sound comes separately: 0 while the video track downloads, 1 for the audio track.
+    public var mediaTrack: Int?
     /// A security-scoped bookmark for a folder chosen for this download alone, so the sandbox lets the app back in.
     public var folderBookmark: Data?
     /// For a DASH download: where the audio track comes from (the video track is `url`).
@@ -133,7 +140,7 @@ public struct Download: Codable, Identifiable, Hashable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, url, finalURL, kind, name, folder, size, context, state, segments, resumable, validator, contentType, added, finished,
-             partPath, finalPath, mediaDone, mediaTotal, mediaOffset, folderBookmark, audioURL, media, mediaNote
+             partPath, finalPath, mediaDone, mediaTotal, mediaOffset, mediaTrack, folderBookmark, audioURL, media, mediaNote
     }
 
     public init(from decoder: Decoder) throws {
@@ -158,6 +165,7 @@ public struct Download: Codable, Identifiable, Hashable, Sendable {
         mediaDone = try c.decodeIfPresent(Int.self, forKey: .mediaDone)
         mediaTotal = try c.decodeIfPresent(Int.self, forKey: .mediaTotal)
         mediaOffset = try c.decodeIfPresent(Int64.self, forKey: .mediaOffset)
+        mediaTrack = try c.decodeIfPresent(Int.self, forKey: .mediaTrack)
         folderBookmark = try c.decodeIfPresent(Data.self, forKey: .folderBookmark)
         audioURL = try c.decodeIfPresent(URL.self, forKey: .audioURL)
         media = try c.decodeIfPresent(Bool.self, forKey: .media) ?? false
@@ -166,10 +174,21 @@ public struct Download: Codable, Identifiable, Hashable, Sendable {
 
     public var bytesReceived: Int64 { segments.reduce(0) { $0 + $1.written } }
 
-    /// 0...1 while the size is known (segments, for HLS), nil otherwise.
+    /// The part files of a stream saved as two tracks; they go with the download when it is cancelled or removed.
+    public var trackParts: (video: PartFile, audio: PartFile) {
+        let stem = (name as NSString).deletingPathExtension
+        return (PartFile(folder: folder, name: stem + " (video)"), PartFile(folder: folder, name: stem + " (audio)"))
+    }
+
+    public var trackPartPaths: [String] {
+        guard kind.isStream else { return [] }
+        return [trackParts.video.url.path, trackParts.audio.url.path]
+    }
+
+    /// 0...1 while the size is known (segments, for a stream), nil otherwise.
     public var fraction: Double? {
         if state == .finished { return 1 }
-        if kind == .hls || kind == .dash {
+        if kind.isStream || kind == .dash {
             guard let mediaDone, let mediaTotal, mediaTotal > 0 else { return nil }
             return min(1, Double(mediaDone) / Double(mediaTotal))
         }

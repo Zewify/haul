@@ -65,6 +65,7 @@ struct MenuBarIcon: View {
     }
 }
 
+@MainActor
 enum MenuBarGlyph {
     /// Menu bar icons are 18 points tall; the app icon's tile fills that once its transparent margin is cropped.
     /// Drawn on demand from the icon itself, as TickThock does, so it is the icon and stays sharp at any scale.

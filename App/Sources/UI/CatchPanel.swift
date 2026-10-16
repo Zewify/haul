@@ -15,7 +15,7 @@ struct CatchPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             if let pending {
                 HStack(spacing: 10) {
-                    Image(systemName: pending.kind == .hls ? "play.rectangle" : "arrow.down.doc")
+                    Image(systemName: pending.kind.isStream || pending.kind == .dash ? "play.rectangle" : "arrow.down.doc")
                         .font(.title).foregroundStyle(Color.accentColor)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(pending.incoming.url).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
@@ -24,10 +24,10 @@ struct CatchPanel: View {
                                 Text(Format.size(probe.size))
                                 if let type = probe.contentType { Text("·").foregroundStyle(.tertiary); Text(type) }
                                 if !probe.acceptsRanges, probe.size != nil { Text("·").foregroundStyle(.tertiary); Text("cannot resume") }
-                            } else if pending.kind == .hls {
-                                Text("HLS stream")
                             } else if let error = pending.error {
                                 Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                            } else if pending.kind.isStream {
+                                Text(pending.kind == .hls ? "HLS stream" : "DASH stream")
                             }
                         }
                         .font(.caption)
