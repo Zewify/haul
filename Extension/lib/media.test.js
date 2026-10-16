@@ -15,10 +15,15 @@ test('plain media files by type or extension', () => {
   assert.equal(classifyResponse('https://c.com/v/clip.mov', 'binary/octet-stream'), 'file');
 });
 
-test('stream segments, DASH, pages and images are ignored', () => {
+test('DASH manifests by type or extension', () => {
+  assert.equal(classifyResponse('https://c.com/v/manifest.mpd', 'application/dash+xml'), 'mpd');
+  assert.equal(classifyResponse('https://vod.example/v2/playlist.mpd?locale=en&pathsig=x', 'application/octet-stream'), 'mpd');
+  assert.equal(classifyResponse('https://c.com/v/stream', 'application/dash+xml; charset=utf-8'), 'mpd');
+});
+
+test('stream segments, pages and images are ignored', () => {
   assert.equal(classifyResponse('https://c.com/v/seg-1.ts', 'video/mp2t'), null);
   assert.equal(classifyResponse('https://c.com/v/seg-1.m4s', 'video/iso.segment'), null);
-  assert.equal(classifyResponse('https://c.com/v/manifest.mpd', 'application/dash+xml'), null);
   assert.equal(classifyResponse('https://c.com/', 'text/html'), null);
   assert.equal(classifyResponse('https://c.com/p.png', 'image/png'), null);
   assert.equal(classifyResponse('https://c.com/v/clip', undefined), null);
@@ -27,6 +32,7 @@ test('stream segments, DASH, pages and images are ignored', () => {
 
 test('describes a media item for the popup: what it is first, where it came from second', () => {
   assert.deepEqual(describeMedia({ url: 'https://c.com/v/master.m3u8', kind: 'hls' }), { title: 'Stream (HLS)', subtitle: 'c.com · master.m3u8' });
+  assert.deepEqual(describeMedia({ url: 'https://c.com/v/manifest.mpd', kind: 'mpd', size: 2643 }), { title: 'Stream (DASH)', subtitle: 'c.com · manifest.mpd' }, 'no size: it is the playlist\'s, not the video\'s');
   assert.deepEqual(describeMedia({ url: 'https://c.com/v/clip.mp4', kind: 'file', size: 10485760, contentType: 'video/mp4' }), { title: 'Video (mp4) · 10.5 MB', subtitle: 'c.com · clip.mp4' });
   assert.deepEqual(describeMedia({ url: 'https://c.com/v/clip', kind: 'file', contentType: 'video/webm' }), { title: 'Video (webm)', subtitle: 'c.com · clip' });
   assert.deepEqual(describeMedia({ url: 'https://c.com/a/track', kind: 'file', contentType: 'audio/mp4' }), { title: 'Audio (mp4)', subtitle: 'c.com · track' });
@@ -152,4 +158,66 @@ test('a Facebook video page gets an item that hands the page itself to Haul', ()
   assert.deepEqual(pageReaderItem('https://www.facebook.com/watch/?v=123'), { kind: 'page', url: 'https://www.facebook.com/watch/?v=123', videoId: '123', label: 'This video · 720p H.264 · Haul reads the page' });
   assert.equal(pageReaderItem('https://www.facebook.com/'), null);
   assert.equal(pageReaderItem('https://example.com/reel/1'), null);
+});
+
+const { hlsChildren, isAdHost, tidyMedia, recordMedia } = require('./media.js');
+
+test('a master playlist names its variants and its separate audio; a media playlist names nothing', () => {
+  // TED's shape: variants with an audio group, I-frame playlists, an audio rendition and subtitles.
+  const master = [
+    '#EXTM3U',
+    '#EXT-X-STREAM-INF:BANDWIDTH=1104484,RESOLUTION=640x480,AUDIO="audio0",SUBTITLES="subs"',
+    'index-f9-v1.m3u8?intro_master_id=9294',
+    '#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=51702,URI="iframes-f9-v1.m3u8?intro_master_id=9294"',
+    '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio0",NAME="medium",DEFAULT=YES,URI="index-f8-a1.m3u8?intro_master_id=9294"',
+    '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="pt-br",URI="/project_masters/1253/subtitles/pt-br.m3u8"',
+  ].join('\n');
+  assert.deepEqual(hlsChildren(master, 'https://hls.ted.com/project_masters/1253/manifest.m3u8?intro_master_id=9294'), [
+    'https://hls.ted.com/project_masters/1253/index-f9-v1.m3u8?intro_master_id=9294',
+    'https://hls.ted.com/project_masters/1253/iframes-f9-v1.m3u8?intro_master_id=9294',
+    'https://hls.ted.com/project_masters/1253/index-f8-a1.m3u8?intro_master_id=9294',
+    'https://hls.ted.com/project_masters/1253/subtitles/pt-br.m3u8',
+  ]);
+  assert.deepEqual(hlsChildren('#EXTM3U\n#EXTINF:4,\nseg1.ts\n#EXT-X-ENDLIST', 'https://c.com/v/index.m3u8'), []);
+  assert.deepEqual(hlsChildren('<html>', 'https://c.com/'), []);
+});
+
+test('ad networks are recognised by host, the site itself is not', () => {
+  assert.ok(isAdHost('https://rr3---sn-ojhoai-5i.c.2mdn.net/videoplayback/id/0026/itag/37/source/web_video_ads'));
+  assert.ok(isAdHost('https://media.innity.net/202609_58056/video1.mp4'));
+  assert.ok(isAdHost('https://pubads.g.doubleclick.net/x.mp4'));
+  assert.ok(isAdHost('https://www.viously.com/video/hls/PynrhUHmVJG/index.m3u8?pw=143'), 'the outstream player w3schools embeds');
+  assert.ok(!isAdHost('https://pu.tedcdn.com/consus/videos/1253/segment-1.ts'));
+  assert.ok(!isAdHost('https://not2mdn.net/v.mp4'));
+});
+
+test('the popup lists the stream, not its pieces, its variant playlists or the ads around it', () => {
+  const items = [
+    { kind: 'hls', url: 'https://hls.ted.com/m/manifest.m3u8', children: ['https://hls.ted.com/m/index-f9-v1.m3u8', 'https://hls.ted.com/m/index-f8-a1.m3u8'] },
+    { kind: 'hls', url: 'https://hls.ted.com/m/index-f9-v1.m3u8' },
+    { kind: 'hls', url: 'https://hls.ted.com/m/index-f8-a1.m3u8' },
+    { kind: 'file', url: 'https://rr3---sn-x.c.2mdn.net/videoplayback/ad.mp4' },
+    { kind: 'file', url: 'https://media.innity.net/a/video2.mp4' },
+    { kind: 'mpd', url: 'https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd' },
+    { kind: 'file', url: 'https://dash.akamaized.net/akamai/bbb_30fps/bbb_a64k/bbb_a64k_4.m4a' },
+    { kind: 'file', url: 'https://other.example/trailer.mp4' },
+  ];
+  assert.deepEqual(tidyMedia(items).map((i) => i.url), [
+    'https://hls.ted.com/m/manifest.m3u8',
+    'https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd',
+    'https://other.example/trailer.mp4',
+  ]);
+  // Without a stream, plain files are all the page has, so they all stay (ads still go).
+  const plain = [{ kind: 'file', url: 'https://www.w3schools.com/html/mov_bbb.mp4' }, { kind: 'file', url: 'https://x.2mdn.net/ad.mp4' }];
+  assert.deepEqual(tidyMedia(plain).map((i) => i.url), ['https://www.w3schools.com/html/mov_bbb.mp4']);
+});
+
+test('a flood of segments never pushes the stream out of the list', () => {
+  const list = [];
+  assert.ok(recordMedia(list, { kind: 'mpd', url: 'https://c.com/v.mpd' }, 5));
+  for (let n = 0; n < 40; n++) recordMedia(list, { kind: 'file', url: `https://c.com/seg_${n}.m4v` }, 5);
+  assert.equal(list.length, 5);
+  assert.equal(list[0].url, 'https://c.com/v.mpd');
+  assert.equal(list[4].url, 'https://c.com/seg_39.m4v');
+  assert.equal(recordMedia(list, { kind: 'mpd', url: 'https://c.com/v.mpd' }, 5), false, 'a repeat is not recorded twice');
 });

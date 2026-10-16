@@ -1,6 +1,7 @@
 // How a network response is recognised as a video or stream worth grabbing (direct edition only).
 (function (root) {
   const HLS_TYPES = ['application/vnd.apple.mpegurl', 'application/x-mpegurl', 'audio/mpegurl', 'audio/x-mpegurl'];
+  const DASH_TYPES = ['application/dash+xml'];
   const SEGMENT_EXTENSIONS = new Set(['ts', 'm4s', 'aac', 'vtt']);
   const SEGMENT_TYPES = ['video/mp2t', 'video/iso.segment'];
   const FILE_EXTENSIONS = new Set(['mp4', 'm4v', 'webm', 'mov', 'mkv', 'm4a', 'mp3', 'flac', 'wav', 'ogg', 'opus']);
@@ -13,11 +14,12 @@
     return dot < 0 ? '' : last.slice(dot + 1).toLowerCase();
   }
 
-  // 'hls' | 'file' | null
+  // 'hls' | 'mpd' | 'file' | null
   function classifyResponse(url, contentType) {
     const type = (contentType || '').split(';')[0].trim().toLowerCase();
     const ext = extensionOf(url);
     if (ext === 'm3u8' || HLS_TYPES.includes(type)) return 'hls';
+    if (ext === 'mpd' || DASH_TYPES.includes(type)) return 'mpd';
     if (SEGMENT_EXTENSIONS.has(ext) || SEGMENT_TYPES.includes(type)) return null;
     if (type.startsWith('video/') || type.startsWith('audio/')) return 'file';
     if (FILE_EXTENSIONS.has(ext)) return 'file';
@@ -223,13 +225,71 @@
     let title;
     if (item.label) title = item.label + (item.duration ? ` · ${Math.floor(item.duration / 60)}:${String(Math.round(item.duration % 60)).padStart(2, '0')}` : '');
     else if (item.kind === 'hls') title = 'Stream (HLS)';
+    else if (item.kind === 'mpd') title = 'Stream (DASH)';
     else if (type.startsWith('audio/')) title = `Audio (${format})`;
     else title = format ? `Video (${format})` : 'Video';
-    if (!item.label && item.size) title += ` · ${formatSize(item.size)}`;
+    // A playlist's own size says nothing about the video it describes.
+    if (!item.label && item.size && item.kind === 'file') title += ` · ${formatSize(item.size)}`;
     return { title, subtitle: [host, name].filter(Boolean).join(' · ') };
   }
 
-  const api = { classifyResponse, describeMedia, formatSize, normaliseMediaURL, findInPage, findDashSets, pageVideoId, parseMPD, labelDashItems, pageReaderItem };
+  // The playlists a master playlist points at (its variants and separate audio), so the popup lists the master alone.
+  function hlsChildren(text, base) {
+    const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (!lines[0] || !lines[0].startsWith('#EXTM3U')) return [];
+    const resolve = (uri) => { try { return normaliseMediaURL(new URL(uri, base).toString()); } catch { return null; } };
+    const children = [];
+    let variantNext = false;
+    for (const line of lines) {
+      if (line.startsWith('#EXT-X-STREAM-INF:')) { variantNext = true; continue; }
+      const uri = /^#EXT-X-(?:MEDIA|I-FRAME-STREAM-INF):.*\bURI="([^"]+)"/.exec(line);
+      if (uri) { const url = resolve(uri[1]); if (url) children.push(url); continue; }
+      if (line.startsWith('#')) continue;
+      if (variantNext) { const url = resolve(line); if (url) children.push(url); variantNext = false; }
+    }
+    return children;
+  }
+
+  // Video ads play through a page's own player and show up beside the real stream; these networks never carry it.
+  const AD_HOSTS = ['doubleclick.net', '2mdn.net', 'googlesyndication.com', 'googleadservices.com', 'imasdk.googleapis.com', 'innity.net',
+    'adnxs.com', 'amazon-adsystem.com', 'springserve.com', 'spotxchange.com', 'teads.tv', 'moatads.com', 'serving-sys.com', 'adsrvr.org',
+    'pubmatic.com', 'rubiconproject.com', 'smartadserver.com', 'criteo.com', 'taboola.com', 'outbrain.com', 'yieldmo.com', 'flashtalking.com',
+    'viously.com'];
+  function hostOf(url) { try { return new URL(url).host.toLowerCase(); } catch { return ''; } }
+  function isAdHost(url) {
+    const host = hostOf(url);
+    return AD_HOSTS.some((ad) => host === ad || host.endsWith('.' + ad));
+  }
+
+  // What the popup lists of what the sniffer saw: no ads; when a page streams, the stream and not its pieces
+  // (segments on the stream's own host, the variant playlists of a master).
+  function tidyMedia(items) {
+    const kept = (items || []).filter((i) => !isAdHost(i.url));
+    const streams = kept.filter((i) => i.kind === 'hls' || i.kind === 'mpd');
+    if (!streams.length) return kept;
+    const streamHosts = new Set(streams.map((i) => hostOf(i.url)));
+    const children = new Set(streams.flatMap((i) => i.children || []));
+    return kept.filter((i) => {
+      if (i.kind === 'file') return !streamHosts.has(hostOf(i.url));
+      if (i.kind === 'hls') return !children.has(i.url);
+      return true;
+    });
+  }
+
+  // Adds a sniffed item, keeping at most `cap`: a busy player fetches hundreds of pieces, and they must never push
+  // the stream itself out, so the oldest plain file goes first.
+  function recordMedia(list, item, cap = 30) {
+    if (list.some((i) => i.url === item.url)) return false;
+    list.push(item);
+    while (list.length > cap) {
+      const index = list.findIndex((i) => i.kind === 'file');
+      list.splice(index < 0 ? 0 : index, 1);
+    }
+    return true;
+  }
+
+  const api = { classifyResponse, describeMedia, formatSize, normaliseMediaURL, findInPage, findDashSets, pageVideoId, parseMPD, labelDashItems, pageReaderItem,
+    hlsChildren, isAdHost, tidyMedia, recordMedia };
   root.HaulMedia = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(globalThis);

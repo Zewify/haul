@@ -61,7 +61,11 @@ function fill(list, items, tab) {
     button.addEventListener('click', async () => {
       button.disabled = true;
       const result = await api.runtime.sendMessage({ type: 'grab', item, referrer: tab.url, pageTitle: tab.title });
-      button.textContent = result && result.ok ? 'Sent' : (result && result.error) || 'Failed';
+      if (result && result.ok) { button.textContent = 'Sent'; return; }
+      // Why it was refused goes under the item, where there is room to read it; the button just says it failed.
+      button.textContent = 'Not saved';
+      subtitleEl.textContent = (result && result.error) || 'Haul did not answer';
+      subtitleEl.classList.add('error');
     });
     li.append(text, button);
     list.append(li);

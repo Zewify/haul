@@ -166,19 +166,35 @@ function installMediaSniffer() {
     if (!kind) return;
     const url = HaulMedia.normaliseMediaURL(details.url);
     const list = mediaByTab.get(details.tabId) || [];
-    if (list.some((item) => item.url === url)) return;
     // The size is only meaningful when the response was the whole file, not one chunk of it.
     const length = url === details.url ? (details.responseHeaders || []).find((h) => h.name.toLowerCase() === 'content-length') : null;
-    list.push({ url, kind, contentType: header && header.value.split(';')[0], size: length ? Number(length.value) : undefined, seen: Date.now() });
-    if (list.length > 30) list.shift();
+    const item = { url, kind, contentType: header && header.value.split(';')[0], size: length ? Number(length.value) : undefined, seen: Date.now() };
+    if (!HaulMedia.recordMedia(list, item)) return;
     mediaByTab.set(details.tabId, list);
-    api.action.setBadgeText({ text: String(list.length), tabId: details.tabId });
+    if (kind === 'hls') readPlaylist(details.tabId, item);
+    showCount(details.tabId);
   }, { urls: ['<all_urls>'], types: ['xmlhttprequest', 'media', 'other', 'main_frame', 'sub_frame'] }, ['responseHeaders']);
 
   api.tabs.onRemoved.addListener((tabId) => mediaByTab.delete(tabId));
   api.webNavigation && api.webNavigation.onCommitted && api.webNavigation.onCommitted.addListener((details) => {
     if (details.frameId === 0) mediaByTab.delete(details.tabId);
   });
+}
+
+function showCount(tabId) {
+  const shown = HaulMedia.tidyMedia(mediaByTab.get(tabId) || []).length;
+  api.action.setBadgeText({ text: shown ? String(shown) : '', tabId });
+}
+
+/// A master playlist names the variant and audio playlists the player fetches next; reading it once lets the popup
+/// list the master alone. The fetch carries the site's cookies, as the player's own did.
+async function readPlaylist(tabId, item) {
+  try {
+    const response = await fetch(item.url, { credentials: 'include' });
+    if (!response.ok) return;
+    item.children = HaulMedia.hlsChildren(await response.text(), item.url);
+    if (item.children.length) showCount(tabId);
+  } catch { /* the popup lists every playlist instead */ }
 }
 
 /// What the page's own source says about its video: muxed progressive files the sniffer never sees as one request,
@@ -211,9 +227,9 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         const s = await settings();
         const tabId = message.tabId;
-        let items = tabId != null ? (mediaByTab.get(tabId) || []) : [];
+        let items = tabId != null ? HaulMedia.tidyMedia(mediaByTab.get(tabId) || []) : [];
         if (state.media && tabId != null) {
-          const fromPage = await pageItems(tabId, message.tabUrl);
+          const fromPage = (await pageItems(tabId, message.tabUrl)).filter((i) => !HaulMedia.isAdHost(i.url));
           const sniffedUrls = items.map((i) => i.url);
           const dash = HaulMedia.labelDashItems(fromPage.filter((i) => i.kind === 'dash'), sniffedUrls, HaulMedia.pageVideoId(message.tabUrl || ''));
           const reader = HaulMedia.pageReaderItem(message.tabUrl || '');
