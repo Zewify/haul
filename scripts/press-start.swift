@@ -1,4 +1,4 @@
-// Presses Start in Haul's catch panel through the accessibility API, the way VoiceOver would.
+// Presses Start in Downhaul's catch panel through the accessibility API, the way VoiceOver would.
 // System Events cannot read SwiftUI's button labels (they live in AXDescription), so this talks to AX directly.
 // Exits 0 once pressed, 2 if Start is disabled, 1 if there is no panel.
 import AppKit
@@ -17,8 +17,8 @@ func findStart(in element: AXUIElement) -> AXUIElement? {
     return nil
 }
 
-guard let haul = NSRunningApplication.runningApplications(withBundleIdentifier: "com.zewify.haul").first else { exit(1) }
-let app = AXUIElementCreateApplication(haul.processIdentifier)
+guard let downhaul = NSRunningApplication.runningApplications(withBundleIdentifier: "com.zewify.downhaul").first else { exit(1) }
+let app = AXUIElementCreateApplication(downhaul.processIdentifier)
 let windows = (value(app, kAXWindowsAttribute) as? [AXUIElement]) ?? []
 guard let panel = windows.first(where: { value($0, kAXTitleAttribute) as? String == "Download" }), let start = findStart(in: panel) else { exit(1) }
 guard value(start, kAXEnabledAttribute) as? Bool != false else { exit(2) }

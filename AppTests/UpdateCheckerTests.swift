@@ -1,13 +1,13 @@
-import HaulCore
+import DownhaulCore
 import XCTest
-@testable import Haul
+@testable import Downhaul
 
 @MainActor
 final class UpdateCheckerTests: XCTestCase {
     nonisolated(unsafe) var defaults: UserDefaults!
 
     override func setUpWithError() throws {
-        defaults = UserDefaults(suiteName: "haul-updates-\(UUID().uuidString)")
+        defaults = UserDefaults(suiteName: "downhaul-updates-\(UUID().uuidString)")
     }
 
     static func feed(_ tag: String, status: Int = 200) -> @Sendable (URLRequest) async throws -> (Data, URLResponse) {

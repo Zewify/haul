@@ -1,6 +1,6 @@
-/// The sites a grab was checked on end to end, and what Haul cannot save, for the Help popover.
+/// The sites a grab was checked on end to end, and what Downhaul cannot save, for the Help popover.
 /// Each was checked by its saved file's tracks and a frame against the page (docs/launch-checklist.md).
-/// zewify.com/haul prints the same list from the zewify repo's `src/haul/data.ts`, so the two change together.
+/// zewify.com/downhaul prints the same list from the zewify repo's `src/downhaul/data.ts`, so the two change together.
 enum TestedSites {
     struct Site: Identifiable {
         let name: String

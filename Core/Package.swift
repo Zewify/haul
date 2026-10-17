@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "HaulCore",
+    name: "DownhaulCore",
     platforms: [.macOS(.v15)],
     products: [
-        .library(name: "HaulCore", targets: ["HaulCore"]),
+        .library(name: "DownhaulCore", targets: ["DownhaulCore"]),
     ],
     targets: [
         // Every rule in the product: the download engine, the model and library, the queue policy,
         // the local server, pairing, HLS and DASH joining. Foundation, Network and AVFoundation only; no AppKit.
-        .target(name: "HaulCore"),
-        .testTarget(name: "HaulCoreTests", dependencies: ["HaulCore"]),
+        .target(name: "DownhaulCore"),
+        .testTarget(name: "DownhaulCoreTests", dependencies: ["DownhaulCore"]),
     ]
 )

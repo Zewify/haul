@@ -1,24 +1,24 @@
-# Haul
+# Downhaul
 
-Haul is a free download manager for the Mac, by Zewify.
+Downhaul is a free download manager for the Mac, by Zewify.
 It takes the downloads your browser starts and fetches them over several connections at once, pauses and resumes them, keeps them in a queue, and grabs video from pages.
 
 - **Fast.** Each file is split into segments that download in parallel, and idle connections take over the tail of busy ones.
-- **Resumable.** Pause, lose the connection, or quit: Haul carries on from where it stopped.
+- **Resumable.** Pause, lose the connection, or quit: Downhaul carries on from where it stopped.
 - **In your browser.** An extension for Chrome, Edge, Brave, Arc and Vivaldi, and one for Safari inside the app, hand downloads over as you click them, cookies included, so files behind a login just work.
 - **Video.** The extension's popup lists what a page plays, the video you are watching first; HLS and DASH streams are saved whole, and separate video and audio tracks are joined into one file on your Mac, without re-encoding. The sites it was tested on are behind the ? in the app's toolbar.
 - **Speed limit.** One cap for every download together, from Settings or the menu bar.
-- **Private.** Haul talks to its extension on your own Mac only. Nothing is sent anywhere.
+- **Private.** Downhaul talks to its extension on your own Mac only. Nothing is sent anywhere.
 
 ## Install
 
-Haul needs macOS 15 or later.
-Installation instructions live at https://zewify.com/haul/.
+Downhaul needs macOS 15 or later.
+Installation instructions live at https://zewify.com/downhaul/.
 
-The install command also puts the Chrome extension in `~/Library/Application Support/Haul/Extension`.
-Open `chrome://extensions`, turn on Developer mode, click Load unpacked, press ⌘⇧G, paste that path and choose the folder; Haul's Settings, under Browser, copies the path.
-Each update replaces that folder in place, so press the reload arrow on Haul's card in `chrome://extensions` afterwards.
-Haul is not on the Chrome Web Store, by choice; this is how the extension is installed.
+The install command also puts the Chrome extension in `~/Library/Application Support/Downhaul/Extension`.
+Open `chrome://extensions`, turn on Developer mode, click Load unpacked, press ⌘⇧G, paste that path and choose the folder; Downhaul's Settings, under Browser, copies the path.
+Each update replaces that folder in place, so press the reload arrow on Downhaul's card in `chrome://extensions` afterwards.
+Downhaul is not on the Chrome Web Store, by choice; this is how the extension is installed.
 Built from source, the extension is this repo's `Extension` folder.
 Safari's copy is inside the app; turn it on in Safari → Settings → Extensions.
 
@@ -31,13 +31,13 @@ You need Xcode and XcodeGen (`brew install xcodegen`), and Node for the extensio
 
 ## Privacy
 
-Haul downloads what you ask it to and keeps its list on your Mac.
+Downhaul downloads what you ask it to and keeps its list on your Mac.
 The extension sends a download's address and that site's cookies to the app on your own Mac, so the download works as it would in the browser; neither goes anywhere else.
-When the popup lists a page's videos, Haul reads the start of each (or its playlist) from the same site, to tell which one you are watching; it keeps nothing from those reads.
+When the popup lists a page's videos, Downhaul reads the start of each (or its playlist) from the same site, to tell which one you are watching; it keeps nothing from those reads.
 The only other requests are a daily check for a newer release, which you can turn off in Settings, and the installer's, both to GitHub.
 
 ## Licence
 
-Haul is source available, not open source.
+Downhaul is source available, not open source.
 The source is published so you can read exactly what the app does, and build it for yourself.
 Zewify keeps all rights to it; no licence to copy, modify or redistribute it is granted.

@@ -1,4 +1,4 @@
-import HaulCore
+import DownhaulCore
 import SwiftUI
 
 /// The menu bar item's menu: what is downloading, the combined speed, and the controls that matter from anywhere.
@@ -10,8 +10,8 @@ struct MenuContent: View {
     var body: some View {
         let engine = model.engine
         if let version = updates.available {
-            // Haul is installed by its curl command, so updating is running it again.
-            Text("Haul \(version.description) is available")
+            // Downhaul is installed by its curl command, so updating is running it again.
+            Text("Downhaul \(version.description) is available")
             Button("Copy Install Command") { updates.copyInstallCommand() }
             Text("Then paste it into Terminal")
             Divider()
@@ -35,9 +35,9 @@ struct MenuContent: View {
         Button("Resume All") { engine.resumeAll() }.disabled(!engine.downloads.contains { $0.state == .paused })
         Toggle("Limit Speed to \(Format.speed(Double(model.settings.speedLimit)))", isOn: Binding(get: { model.settings.limitSpeed }, set: { model.setLimitSpeed($0) }))
         Divider()
-        Button("Open Haul") { windows.showMain() }.keyboardShortcut("o")
+        Button("Open Downhaul") { windows.showMain() }.keyboardShortcut("o")
         Button("Settings…") { windows.showSettings() }.keyboardShortcut(",")
         Divider()
-        Button("Quit Haul") { NSApp.terminate(nil) }.keyboardShortcut("q")
+        Button("Quit Downhaul") { NSApp.terminate(nil) }.keyboardShortcut("q")
     }
 }

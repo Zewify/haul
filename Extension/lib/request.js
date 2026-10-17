@@ -22,6 +22,6 @@
   }
 
   const api = { cookieHeader, buildDownloadBody, isHTTP };
-  root.HaulRequest = api;
+  root.DownhaulRequest = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(globalThis);

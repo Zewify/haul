@@ -1,6 +1,6 @@
 {
-  "name": "haul-extension",
+  "name": "downhaul-extension",
   "private": true,
-  "description": "The Haul browser extension: hands downloads to the Haul app.",
+  "description": "The Downhaul browser extension: hands downloads to the Downhaul app.",
   "scripts": { "test": "node --test lib/*.test.js" }
 }

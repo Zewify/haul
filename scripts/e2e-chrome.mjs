@@ -1,7 +1,7 @@
-// End-to-end check of the Chrome extension against a running Haul: launches a throwaway Chrome with the
-// extension loaded, pairs it (clicking Allow in Haul through System Events), clicks a file link on a test page,
-// presses Start in Haul's catch panel, and waits for the file to land.
-//   HAUL_CHROME=<chrome-for-testing-binary> node scripts/e2e-chrome.mjs <test-page-url> <expected-file-in-~/Downloads>
+// End-to-end check of the Chrome extension against a running Downhaul: launches a throwaway Chrome with the
+// extension loaded, pairs it (clicking Allow in Downhaul through System Events), clicks a file link on a test page,
+// presses Start in Downhaul's catch panel, and waits for the file to land.
+//   DOWNHAUL_CHROME=<chrome-for-testing-binary> node scripts/e2e-chrome.mjs <test-page-url> <expected-file-in-~/Downloads>
 import { spawn, execFile } from 'node:child_process';
 import { existsSync, statSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
@@ -11,11 +11,11 @@ import { pressStart } from './catch-panel.mjs';
 const [pageURL, expectedName] = process.argv.slice(2);
 if (!pageURL || !expectedName) { console.error('usage: e2e-chrome.mjs <page-url> <expected-file>'); process.exit(2); }
 const port = 9333;
-const profile = mkdtempSync(join(tmpdir(), 'haul-chrome-'));
+const profile = mkdtempSync(join(tmpdir(), 'downhaul-chrome-'));
 const extension = new URL('../Extension', import.meta.url).pathname;
 // Google Chrome 137 and later ignores --load-extension; Chrome for Testing or Chromium honours it.
-// Point HAUL_CHROME at such a binary (for example one from `npx @puppeteer/browsers install chrome@stable`).
-const binary = process.env.HAUL_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+// Point DOWNHAUL_CHROME at such a binary (for example one from `npx @puppeteer/browsers install chrome@stable`).
+const binary = process.env.DOWNHAUL_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const chrome = spawn(binary, [
   `--user-data-dir=${profile}`, `--load-extension=${extension}`, `--remote-debugging-port=${port}`,
   '--no-first-run', '--no-default-browser-check', 'about:blank',
@@ -53,18 +53,18 @@ async function evaluate(target, expression) {
 
 let failed = false;
 try {
-  // Haul's worker is idle until something talks to it, so it is not listed; find the extension's id through
+  // Downhaul's worker is idle until something talks to it, so it is not listed; find the extension's id through
   // the extensions page, then drive the background through the extension's own popup page in a tab.
   const first = await waitFor((t) => t.type === 'page', 'a page');
   const extensionsPage = connect(first); await extensionsPage.ready;
   await extensionsPage.send('Page.navigate', { url: 'chrome://extensions/' });
   await sleep(1500);
-  const info = await extensionsPage.send('Runtime.evaluate', { expression: `new Promise(res => chrome.developerPrivate.getExtensionsInfo({includeDisabled: true}, res)).then(list => JSON.stringify(list.filter(e => e.name === 'Haul').map(e => ({ id: e.id, errors: e.runtimeErrors.map(x => x.message).concat(e.manifestErrors.map(x => x.message)) }))))`, awaitPromise: true, returnByValue: true });
-  const [haul] = JSON.parse(info.result.result.value);
-  if (!haul) throw new Error('the Haul extension did not load');
-  if (haul.errors.length) throw new Error('extension errors: ' + haul.errors.join('; '));
-  console.log('extension id', haul.id);
-  await extensionsPage.send('Page.navigate', { url: `chrome-extension://${haul.id}/popup.html` });
+  const info = await extensionsPage.send('Runtime.evaluate', { expression: `new Promise(res => chrome.developerPrivate.getExtensionsInfo({includeDisabled: true}, res)).then(list => JSON.stringify(list.filter(e => e.name === 'Downhaul').map(e => ({ id: e.id, errors: e.runtimeErrors.map(x => x.message).concat(e.manifestErrors.map(x => x.message)) }))))`, awaitPromise: true, returnByValue: true });
+  const [downhaul] = JSON.parse(info.result.result.value);
+  if (!downhaul) throw new Error('the Downhaul extension did not load');
+  if (downhaul.errors.length) throw new Error('extension errors: ' + downhaul.errors.join('; '));
+  console.log('extension id', downhaul.id);
+  await extensionsPage.send('Page.navigate', { url: `chrome-extension://${downhaul.id}/popup.html` });
   await sleep(1500);
   const ask = async (message) => {
     const r = await extensionsPage.send('Runtime.evaluate', { expression: `chrome.runtime.sendMessage(${JSON.stringify(message)}).then(x => JSON.stringify(x))`, awaitPromise: true, returnByValue: true });
@@ -73,9 +73,9 @@ try {
   };
   const status = await ask({ type: 'status' });
   console.log('status', JSON.stringify(status));
-  if (!status.connected) throw new Error('Haul is not answering on 48512');
+  if (!status.connected) throw new Error('Downhaul is not answering on 48512');
   // Pair: the app shows an alert; press Allow for it.
-  const approver = (async () => { for (let i = 0; i < 20; i++) { await sleep(500); if (await osa('tell application "System Events" to tell process "Haul"\nset clicked to false\nrepeat with w in windows\nif exists button "Allow" of w then\nclick button "Allow" of w\nset clicked to true\nend if\nend repeat\nif not clicked then error "no alert"\nend tell') !== null) return true; } return false; })();
+  const approver = (async () => { for (let i = 0; i < 20; i++) { await sleep(500); if (await osa('tell application "System Events" to tell process "Downhaul"\nset clicked to false\nrepeat with w in windows\nif exists button "Allow" of w then\nclick button "Allow" of w\nset clicked to true\nend if\nend repeat\nif not clicked then error "no alert"\nend tell') !== null) return true; } return false; })();
   const paired = await ask({ type: 'pair' });
   console.log('pair', JSON.stringify(paired), 'approver clicked:', await approver);
   if (!paired.ok) throw new Error('pairing failed');
@@ -90,7 +90,7 @@ try {
   };
   const clicked = await run(`(() => { const a = document.getElementById('file'); a.click(); return a.href; })()`);
   console.log('clicked', clicked);
-  // Haul asks before starting, in its catch panel.
+  // Downhaul asks before starting, in its catch panel.
   if (!(await pressStart())) throw new Error('the catch panel never offered Start');
   const file = join(homedir(), 'Downloads', expectedName);
   let done = false;

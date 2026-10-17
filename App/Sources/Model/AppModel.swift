@@ -1,5 +1,5 @@
 import AppKit
-import HaulCore
+import DownhaulCore
 import Observation
 import os
 import ServiceManagement
@@ -47,7 +47,7 @@ final class AppModel {
     @ObservationIgnored private var dirty = false
     @ObservationIgnored private var scopedFolder: URL?
     @ObservationIgnored private let session = URLSession(configuration: DownloadEngine.sessionConfiguration())
-    @ObservationIgnored private let log = Logger(subsystem: "com.zewify.haul", category: "model")
+    @ObservationIgnored private let log = Logger(subsystem: "com.zewify.downhaul", category: "model")
 
     var settings: Settings { library.settings }
     static var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0" }
@@ -197,8 +197,8 @@ final class AppModel {
             switch self {
             case .notAURL(let text): "“\(text)” is not an http or https link."
             case .probe(let url, let message): "\(url): \(message)"
-            case .webPage(let url): "\(url) is a web page, not a file. Open it in your browser and use the Haul extension to grab what is on it."
-            case .noVideoOnPage(let url): "No video found on \(url). It may need a login, or the post may be private; open it in your browser and use the Haul extension."
+            case .webPage(let url): "\(url) is a web page, not a file. Open it in your browser and use the Downhaul extension to grab what is on it."
+            case .noVideoOnPage(let url): "No video found on \(url). It may need a login, or the post may be private; open it in your browser and use the Downhaul extension."
             }
         }
     }
@@ -306,8 +306,8 @@ final class AppModel {
             return pending
         }
         if incoming.kind == "page" {
-            // The extension hands over the page itself; Haul reads it as Safari would and takes the H.264 file.
-            guard FacebookPage.isFacebook(url) else { pending.error = "Haul can only read Facebook video pages"; return pending }
+            // The extension hands over the page itself; Downhaul reads it as Safari would and takes the H.264 file.
+            guard FacebookPage.isFacebook(url) else { pending.error = "Downhaul can only read Facebook video pages"; return pending }
             do {
                 guard let download = try await facebookDownload(for: url) else {
                     pending.error = "No video found on that page (it may need a login)"
@@ -366,7 +366,7 @@ final class AppModel {
             serverError = nil
         } catch {
             serverListening = false
-            serverError = "Port \(settings.port) could not be opened: \(error.localizedDescription). Haul tries again every ten seconds."
+            serverError = "Port \(settings.port) could not be opened: \(error.localizedDescription). Downhaul tries again every ten seconds."
             log.error("server: \(error.localizedDescription, privacy: .public)")
             Task { try? await Task.sleep(for: .seconds(10)); if !self.serverListening { self.startServer() } }
         }
@@ -377,8 +377,8 @@ final class AppModel {
     static func askToPair(_ request: PairRequest) async -> Bool {
         NSApp.activate()
         let alert = NSAlert()
-        alert.messageText = "Allow \(request.name) to send downloads to Haul?"
-        alert.informativeText = "The Haul extension in \(request.name) wants to hand its downloads to this app. Only allow browsers you use yourself."
+        alert.messageText = "Allow \(request.name) to send downloads to Downhaul?"
+        alert.informativeText = "The Downhaul extension in \(request.name) wants to hand its downloads to this app. Only allow browsers you use yourself."
         alert.addButton(withTitle: "Allow")
         alert.addButton(withTitle: "Don’t Allow")
         return alert.runModal() == .alertFirstButtonReturn
@@ -400,7 +400,7 @@ extension AppModel: ExtensionServerDelegate {
         let pending = await makeCatch(download, media: media)
         if let error = pending.error {
             // Refused, so the browser keeps its own download rather than ending up with neither.
-            throw ServerError.badRequest(pending.streamError ? error : "Haul could not reach the file: \(error)")
+            throw ServerError.badRequest(pending.streamError ? error : "Downhaul could not reach the file: \(error)")
         }
         if settings.askBeforeStarting {
             self.pending.append(pending)

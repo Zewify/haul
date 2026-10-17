@@ -36,12 +36,12 @@ jobs:
         run: brew install xcodegen
       - name: Test
         env:
-          HAUL_SKIP_HOSTED: "1"
-          HAUL_SKIP_AV: "1"
+          DOWNHAUL_SKIP_HOSTED: "1"
+          DOWNHAUL_SKIP_AV: "1"
         run: ./scripts/test.sh
       - name: Package
         run: ./scripts/package.sh
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" build/release/Haul-*.zip build/release/Haul-*.zip.sha256 --title "Haul ${GITHUB_REF_NAME#v}" --notes-file build/release/notes.md --verify-tag
+        run: gh release create "$GITHUB_REF_NAME" build/release/Downhaul-*.zip build/release/Downhaul-*.zip.sha256 --title "Downhaul ${GITHUB_REF_NAME#v}" --notes-file build/release/notes.md --verify-tag

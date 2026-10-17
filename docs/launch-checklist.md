@@ -1,11 +1,11 @@
-# Haul — launch checklist
+# Downhaul — launch checklist
 
-What is left before Haul can ship. Tick items here rather than tracking them elsewhere.
+What is left before Downhaul can ship. Tick items here rather than tracking them elsewhere.
 
 ## Decided
 
 - [x] Free, one build, published from zewify.com the way PortGlimpse is (owner, 2026-10-14): ad hoc signed, installed with a curl command, source available on GitHub. No Pro, no App Store.
-- [ ] The name. "Haul" is a working name; check trademarks before the launch is announced anywhere.
+- [x] The name (2026-10-17): Downhaul, chosen by the owner after a desk search found another free Mac download manager called Haul (github.com/sibiraj-s/haul, from 2026-10-01) and no app or project called Downhaul, and Zewify/downhaul free. Not checked: the trademark registers themselves (USPTO, EUIPO, IPOPHL could not be queried); a lawyer's clearance search before money is spent on the name.
 - [ ] Whether "ask before starting" stays on by default.
 
 ## Distribution
@@ -14,7 +14,7 @@ What is left before Haul can ship. Tick items here rather than tracking them els
 
 ## Extensions
 
-- [x] No Chrome Web Store (owner, 2026-10-17): the extension is loaded unpacked. From 0.2.1 the release carries it and the install command puts it in `~/Library/Application Support/Haul/Extension`, replaced in place by each update; Settings → Browser copies the path.
+- [x] No Chrome Web Store (owner, 2026-10-17): the extension is loaded unpacked. From 0.2.1 the release carries it and the install command puts it in `~/Library/Application Support/Downhaul/Extension`, replaced in place by each update; Settings → Browser copies the path.
 - [ ] Safari: test the packaged extension (it ships inside the app, ad hoc signed); confirm the content-script capture, the context menus and the video popup.
 - [ ] Firefox, if asked for.
 
@@ -33,7 +33,7 @@ What is left before Haul can ship. Tick items here rather than tracking them els
 - [ ] Grabber: signed-in pages (Instagram, Facebook and X feeds) are untested.
 - [ ] Grabber: the catch panel for media should show which item is which (HD with audio, SD, stream) and let the user pick; today the popup shows the list and the panel shows one.
 - [ ] Grabber: Facebook names. The page title is "Facebook" when signed in, so files are "Facebook <video id>.mp4"; the caption is only in the crawler-served page. Decide whether to fetch the caption (one more page load as a crawler) or let the user rename in the panel.
-- [x] Grabber: YouTube is out of scope. Its streams are DASH with signed, throttled, frequently re-encrypted URLs that need a maintained extractor (yt-dlp carries thousands of lines for it). The popup says "Haul does not save video from YouTube." instead of listing pieces that would not play (2026-10-17).
+- [x] Grabber: YouTube is out of scope. Its streams are DASH with signed, throttled, frequently re-encrypted URLs that need a maintained extractor (yt-dlp carries thousands of lines for it). The popup says "Downhaul does not save video from YouTube." instead of listing pieces that would not play (2026-10-17).
 - [ ] Notifications when a download finishes.
-- [x] Website pages in the `zewify` repo (`/haul/`), with screenshots from `scripts/window-shot.swift`; the tested-sites list there and in the app's "?" popover change together.
+- [x] Website pages in the `zewify` repo (`/downhaul/`), with screenshots from `scripts/window-shot.swift`; the tested-sites list there and in the app's "?" popover change together.
 - [ ] The menu bar icon's progress bar: check it against light and dark menu bars at 2560 wide.

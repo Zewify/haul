@@ -11,7 +11,7 @@ struct AddURLSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Add downloads").font(.headline)
-            Text("One link per line, then ⌘↩. Haul checks each link and names the file as the server does. A Facebook video link is read for its video and audio tracks.")
+            Text("One link per line, then ⌘↩. Downhaul checks each link and names the file as the server does. A Facebook video link is read for its video and audio tracks.")
                 .font(.callout).foregroundStyle(.secondary)
             TextEditor(text: $text)
                 .font(.body.monospaced())

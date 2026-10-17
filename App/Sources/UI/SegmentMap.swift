@@ -1,4 +1,4 @@
-import HaulCore
+import DownhaulCore
 import SwiftUI
 
 /// The bar that shows every segment's filled part in place: the signature of a segmented downloader.

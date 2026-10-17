@@ -1,6 +1,6 @@
-import HaulCore
+import DownhaulCore
 import XCTest
-@testable import Haul
+@testable import Downhaul
 
 @MainActor
 final class AppModelTests: XCTestCase {
@@ -9,7 +9,7 @@ final class AppModelTests: XCTestCase {
     nonisolated(unsafe) var store: LibraryStore!
 
     override func setUpWithError() throws {
-        folder = FileManager.default.temporaryDirectory.appendingPathComponent("haul-app-\(UUID().uuidString)")
+        folder = FileManager.default.temporaryDirectory.appendingPathComponent("downhaul-app-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         store = LibraryStore(url: folder.appendingPathComponent("library.json"))
         var library = Library()

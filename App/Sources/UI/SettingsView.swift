@@ -1,4 +1,4 @@
-import HaulCore
+import DownhaulCore
 import SwiftUI
 
 struct SettingsView: View {
@@ -30,9 +30,9 @@ struct GeneralSettings: View {
                 }
             }
             Toggle("Ask before starting a download from the browser", isOn: Binding(get: { model.settings.askBeforeStarting }, set: { model.setAskBeforeStarting($0) }))
-            Toggle("Open Haul at login", isOn: Binding(get: { model.settings.openAtLogin }, set: { model.setOpenAtLogin($0) }))
+            Toggle("Open Downhaul at login", isOn: Binding(get: { model.settings.openAtLogin }, set: { model.setOpenAtLogin($0) }))
             Toggle("Check for updates once a day", isOn: Binding(get: { updates.isEnabled }, set: { updates.isEnabled = $0 }))
-            Text("Haul keeps running in the menu bar when its window is closed, so the browser extension can always reach it.")
+            Text("Downhaul keeps running in the menu bar when its window is closed, so the browser extension can always reach it.")
                 .font(.callout).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
@@ -78,7 +78,7 @@ struct ConnectionSettings: View {
                     }
                 }
                 .disabled(!model.settings.limitSpeed)
-                Text("Keeps room for calls and streaming while Haul works. The menu bar menu turns it on and off.")
+                Text("Keeps room for calls and streaming while Downhaul works. The menu bar menu turns it on and off.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section("Browser extension server") {
@@ -128,8 +128,8 @@ struct BrowserSettings: View {
             }
             Section("Install the extension") {
                 Group {
-                    Text("Safari: the Haul extension comes with this app. Turn it on in Safari → Settings → Extensions.")
-                    Text("Chrome, Edge, Brave, Arc, Vivaldi: open chrome://extensions, turn on Developer mode, click Load unpacked, press ⌘⇧G, paste this folder's path and choose it. After an update, press the reload arrow on Haul's card there.")
+                    Text("Safari: the Downhaul extension comes with this app. Turn it on in Safari → Settings → Extensions.")
+                    Text("Chrome, Edge, Brave, Arc, Vivaldi: open chrome://extensions, turn on Developer mode, click Load unpacked, press ⌘⇧G, paste this folder's path and choose it. After an update, press the reload arrow on Downhaul's card there.")
                     LabeledContent("Extension folder") {
                         HStack {
                             Text(Format.folder(Format.extensionFolder)).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
@@ -140,7 +140,7 @@ struct BrowserSettings: View {
                             }
                         }
                     }
-                    Text("Then open the extension's popup and press Connect to Haul. Downloads the browser starts are handed to Haul; links to files are caught as you click them.")
+                    Text("Then open the extension's popup and press Connect to Downhaul. Downloads the browser starts are handed to Downhaul; links to files are caught as you click them.")
                         .foregroundStyle(.secondary)
                 }
                 .font(.callout)

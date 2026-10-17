@@ -1,4 +1,4 @@
-import HaulCore
+import DownhaulCore
 import SwiftUI
 
 /// A download the browser handed over, waiting for the user: name, folder, Start.

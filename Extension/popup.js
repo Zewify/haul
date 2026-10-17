@@ -48,7 +48,7 @@ function fill(list, items, tab, pageTitle) {
     const li = document.createElement('li');
     const text = document.createElement('div');
     text.className = 'text';
-    const { title, subtitle } = HaulMedia.describeMedia(item);
+    const { title, subtitle } = DownhaulMedia.describeMedia(item);
     const titleEl = document.createElement('span');
     titleEl.className = 'title';
     titleEl.textContent = title;
@@ -59,7 +59,7 @@ function fill(list, items, tab, pageTitle) {
     text.title = item.url;
     const button = document.createElement('button');
     button.textContent = 'Grab';
-    // A live stream has no end to save to; Haul would only refuse it.
+    // A live stream has no end to save to; Downhaul would only refuse it.
     if (item.live) { button.textContent = 'Live'; button.disabled = true; }
     button.addEventListener('click', async () => {
       button.disabled = true;
@@ -67,7 +67,7 @@ function fill(list, items, tab, pageTitle) {
       if (result && result.ok) { button.textContent = 'Sent'; return; }
       // Why it was refused goes under the item, where there is room to read it; the button just says it failed.
       button.textContent = 'Not saved';
-      subtitleEl.textContent = (result && result.error) || 'Haul did not answer';
+      subtitleEl.textContent = (result && result.error) || 'Downhaul did not answer';
       subtitleEl.classList.add('error');
     });
     li.append(text, button);
@@ -77,13 +77,13 @@ function fill(list, items, tab, pageTitle) {
 
 $('pairButton').addEventListener('click', async () => {
   $('pairButton').disabled = true;
-  $('pairButton').textContent = 'Waiting for Haul…';
+  $('pairButton').textContent = 'Waiting for Downhaul…';
   const result = await api.runtime.sendMessage({ type: 'pair' });
   if (!result || !result.ok) {
     $('pairError').hidden = false;
     $('pairError').textContent = (result && result.error) || 'Could not connect';
     $('pairButton').disabled = false;
-    $('pairButton').textContent = 'Connect to Haul';
+    $('pairButton').textContent = 'Connect to Downhaul';
   }
   await render();
 });

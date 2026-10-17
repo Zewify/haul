@@ -1,14 +1,14 @@
 import AppKit
-import HaulCore
+import DownhaulCore
 import Observation
 
-/// Once a day, asks GitHub for Haul's latest release and remembers a newer one, as PortGlimpse does.
-/// Haul is installed by the curl command, so an update is that command again; network failures are silent.
+/// Once a day, asks GitHub for Downhaul's latest release and remembers a newer one, as PortGlimpse does.
+/// Downhaul is installed by the curl command, so an update is that command again; network failures are silent.
 @MainActor
 @Observable
 final class UpdateChecker {
-    nonisolated static let installCommand = "curl -fsSL https://zewify.com/haul/install.sh | sh"
-    nonisolated static let feed = URL(string: "https://api.github.com/repos/Zewify/haul/releases/latest")!
+    nonisolated static let installCommand = "curl -fsSL https://zewify.com/downhaul/install.sh | sh"
+    nonisolated static let feed = URL(string: "https://api.github.com/repos/Zewify/downhaul/releases/latest")!
 
     private enum Keys {
         static let enabled = "checkForUpdates"

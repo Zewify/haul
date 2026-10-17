@@ -1,4 +1,4 @@
-// Catches clicks on links to files while Haul is connected, so Safari gets downloads too. A plain left click only;
+// Catches clicks on links to files while Downhaul is connected, so Safari gets downloads too. A plain left click only;
 // modifier clicks and the browser's own download flow are left alone.
 (function () {
   const api = globalThis.browser ?? globalThis.chrome;
@@ -29,7 +29,7 @@
   // The videos a person is watching: on screen and started; real videos before looping GIF-style clips (some sites
   // mark those <video loop>), then by the video's own picture size, not the space it fills: a GIF clip is often a
   // small picture stretched over a big box (X's are 244×224 shown at 520×477). Their source names the file when the
-  // player plays one directly; a blob: player gives only its length and picture size, which Haul matches instead.
+  // player plays one directly; a blob: player gives only its length and picture size, which Downhaul matches instead.
   function playingVideos() {
     return allVideos(document)
       .map((v) => ({ v, box: v.getBoundingClientRect() }))
@@ -43,7 +43,7 @@
   // The popup asks for the page's own video sources, what is playing, and the page's own name for itself.
   api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || message.type !== 'scan') return false;
-    const media = globalThis.HaulMedia;
+    const media = globalThis.DownhaulMedia;
     let found = [];
     if (media && media.findDashSets) {
       const html = document.documentElement.outerHTML;
@@ -61,7 +61,7 @@
     const anchor = event.target && event.target.closest && event.target.closest('a[href]');
     if (!anchor) return;
     const href = anchor.href;
-    if (!HaulLinks.isFileLink(href, anchor.hasAttribute('download'))) return;
+    if (!DownhaulLinks.isFileLink(href, anchor.hasAttribute('download'))) return;
     event.preventDefault();
     event.stopPropagation();
     api.runtime.sendMessage({ type: 'download', url: href, referrer: location.href, pageTitle: document.title }).then((result) => {

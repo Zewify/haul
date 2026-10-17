@@ -1,4 +1,4 @@
-import HaulCore
+import DownhaulCore
 import SwiftUI
 
 /// The download list with its toolbar and filter.
@@ -59,8 +59,8 @@ struct MainWindow: View {
                 Button { showingAdd = true } label: { Label("Add URL", systemImage: "plus") }
                     .help("Download a link")
                     .keyboardShortcut("n", modifiers: .command)
-                Button { showingSites.toggle() } label: { Label("Sites Haul Works With", systemImage: "questionmark.circle") }
-                    .help("Which websites Haul can save video from")
+                Button { showingSites.toggle() } label: { Label("Sites Downhaul Works With", systemImage: "questionmark.circle") }
+                    .help("Which websites Downhaul can save video from")
                     .popover(isPresented: $showingSites, arrowEdge: .bottom) { TestedSitesView() }
             }
         }

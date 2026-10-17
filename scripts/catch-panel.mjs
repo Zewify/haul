@@ -1,5 +1,5 @@
-// Presses Start in Haul's catch panel through accessibility (scripts/press-start.swift). Never a keystroke: a
-// keystroke goes to whichever app is in front, which may be the user's own browser, not Haul.
+// Presses Start in Downhaul's catch panel through accessibility (scripts/press-start.swift). Never a keystroke: a
+// keystroke goes to whichever app is in front, which may be the user's own browser, not Downhaul.
 import { execFile } from 'node:child_process';
 
 const script = new URL('./press-start.swift', import.meta.url).pathname;
