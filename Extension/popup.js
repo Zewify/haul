@@ -8,7 +8,7 @@ async function currentTab() {
 
 async function render() {
   const tab = await currentTab();
-  const state = await api.runtime.sendMessage({ type: 'status', tabId: tab && tab.id, tabUrl: tab && tab.url });
+  const state = await api.runtime.sendMessage({ type: 'status', tabId: tab && tab.id, tabUrl: tab && tab.url, tabTitle: tab && tab.title });
   $('connect').hidden = true; $('down').hidden = true; $('ready').hidden = true;
   const dot = $('dot');
   dot.className = 'dot';
@@ -36,12 +36,12 @@ async function render() {
     $('noMedia').hidden = items.length > 0;
     $('pageGroup').hidden = fromPage.length === 0;
     $('seenGroup').hidden = seen.length === 0;
-    fill($('pageMedia'), fromPage, tab);
-    fill($('media'), seen, tab);
+    fill($('pageMedia'), fromPage, tab, state.pageTitle);
+    fill($('media'), seen, tab, state.pageTitle);
   }
 }
 
-function fill(list, items, tab) {
+function fill(list, items, tab, pageTitle) {
   list.textContent = '';
   for (const item of items) {
     const li = document.createElement('li');
@@ -58,9 +58,11 @@ function fill(list, items, tab) {
     text.title = item.url;
     const button = document.createElement('button');
     button.textContent = 'Grab';
+    // A live stream has no end to save to; Haul would only refuse it.
+    if (item.live) { button.textContent = 'Live'; button.disabled = true; }
     button.addEventListener('click', async () => {
       button.disabled = true;
-      const result = await api.runtime.sendMessage({ type: 'grab', item, referrer: tab.url, pageTitle: tab.title });
+      const result = await api.runtime.sendMessage({ type: 'grab', item, referrer: tab.url, pageTitle: pageTitle || tab.title });
       if (result && result.ok) { button.textContent = 'Sent'; return; }
       // Why it was refused goes under the item, where there is room to read it; the button just says it failed.
       button.textContent = 'Not saved';

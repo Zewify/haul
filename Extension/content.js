@@ -17,7 +17,30 @@
     });
   });
 
-  // The popup asks for the page's own video sources (direct edition); the store edition's stub finds nothing.
+  // Every <video> on the page, including those inside players' shadow roots (Reddit's, for one).
+  function allVideos(root, out = []) {
+    for (const el of root.querySelectorAll('*')) {
+      if (el.tagName === 'VIDEO') out.push(el);
+      if (el.shadowRoot) allVideos(el.shadowRoot, out);
+    }
+    return out;
+  }
+
+  // The videos a person is watching: on screen and started; real videos before looping GIF-style clips (some sites
+  // mark those <video loop>), then by the video's own picture size, not the space it fills: a GIF clip is often a
+  // small picture stretched over a big box (X's are 244×224 shown at 520×477). Their source names the file when the
+  // player plays one directly; a blob: player gives only its length and picture size, which Haul matches instead.
+  function playingVideos() {
+    return allVideos(document)
+      .map((v) => ({ v, box: v.getBoundingClientRect() }))
+      .filter(({ v, box }) => box.width * box.height > 0 && box.bottom > 0 && box.top < innerHeight && box.right > 0 && box.left < innerWidth
+        && (!v.paused || v.currentTime > 0) && v.readyState > 0)
+      .sort((a, b) => (a.v.loop - b.v.loop) || (b.v.videoWidth * b.v.videoHeight - a.v.videoWidth * a.v.videoHeight)
+        || (b.box.width * b.box.height - a.box.width * a.box.height))
+      .map(({ v }) => ({ src: v.currentSrc || v.src || '', duration: Number.isFinite(v.duration) ? v.duration : 0, width: v.videoWidth, height: v.videoHeight }));
+  }
+
+  // The popup asks for the page's own video sources, what is playing, and the page's own name for itself.
   api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || message.type !== 'scan') return false;
     const media = globalThis.HaulMedia;
@@ -27,7 +50,8 @@
       // Joinable DASH pairs first (video + audio, this page's video before others), then plain progressive files.
       found = media.findDashSets(html, media.pageVideoId(location.href)).concat(media.findInPage(html));
     }
-    sendResponse(found);
+    const og = document.querySelector('meta[property="og:title"]');
+    sendResponse({ items: found, playing: playingVideos(), ogTitle: og ? og.content : null });
     return false;
   });
 

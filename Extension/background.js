@@ -161,17 +161,21 @@ function installMediaSniffer() {
   snifferInstalled = true;
   api.webRequest.onHeadersReceived.addListener((details) => {
     if (details.tabId < 0) return;
-    const header = (details.responseHeaders || []).find((h) => h.name.toLowerCase() === 'content-type');
-    const kind = HaulMedia.classifyResponse(details.url, header && header.value);
+    const headerValue = (name) => { const h = (details.responseHeaders || []).find((x) => x.name.toLowerCase() === name); return h && h.value; };
+    const contentType = headerValue('content-type');
+    const range = headerValue('content-range');
+    const kind = HaulMedia.classifyResponse(details.url, contentType, { status: details.statusCode, range });
     if (!kind) return;
     const url = HaulMedia.normaliseMediaURL(details.url);
     const list = mediaByTab.get(details.tabId) || [];
-    // The size is only meaningful when the response was the whole file, not one chunk of it.
-    const length = url === details.url ? (details.responseHeaders || []).find((h) => h.name.toLowerCase() === 'content-length') : null;
-    const item = { url, kind, contentType: header && header.value.split(';')[0], size: length ? Number(length.value) : undefined, seen: Date.now() };
+    // The size is the file's when the response was the whole file, or when a ranged one says the total.
+    const length = headerValue('content-length');
+    const size = HaulMedia.rangeTotal(range) || (url === details.url && !range && length ? Number(length) : undefined);
+    const item = { url, kind, contentType: contentType && contentType.split(';')[0], size, seen: Date.now() };
     if (!HaulMedia.recordMedia(list, item)) return;
     mediaByTab.set(details.tabId, list);
     if (kind === 'hls') readPlaylist(details.tabId, item);
+    scheduleInspection(details.tabId);
     showCount(details.tabId);
   }, { urls: ['<all_urls>'], types: ['xmlhttprequest', 'media', 'other', 'main_frame', 'sub_frame'] }, ['responseHeaders']);
 
@@ -197,12 +201,68 @@ async function readPlaylist(tabId, item) {
   } catch { /* the popup lists every playlist instead */ }
 }
 
+// MARK: What each item is
+
+/// What Haul read from each item's first bytes or playlist (length, tracks, picture size), by URL.
+const inspected = new Map();
+/// Inspections in flight, by URL, so the popup waits for an answer already on its way instead of missing it.
+const inspecting = new Map();
+const inspectTimers = new Map();
+
+/// Inspects a tab's new items shortly after they appear, so the popup usually has the answers when it opens.
+function scheduleInspection(tabId) {
+  clearTimeout(inspectTimers.get(tabId));
+  inspectTimers.set(tabId, setTimeout(async () => {
+    inspectTimers.delete(tabId);
+    try {
+      const tab = await api.tabs.get(tabId);
+      await inspectItems(HaulMedia.tidyMedia(mediaByTab.get(tabId) || []), tab.url);
+    } catch { /* the tab went away */ }
+  }, 1500));
+}
+
+/// Asks the app about the items it has not seen yet; the app reads them with the site's cookies and the page as referrer.
+async function inspectItems(items, referrer) {
+  const wanted = items.filter((i) => ['file', 'hls', 'mpd'].includes(i.kind));
+  const fresh = wanted.filter((i) => !inspected.has(i.url) && !inspecting.has(i.url)).slice(0, 16);
+  const asking = fresh.length ? askApp(fresh, referrer) : null;
+  for (const item of fresh) inspecting.set(item.url, asking);
+  await Promise.all([...new Set(wanted.map((i) => inspecting.get(i.url)).filter(Boolean))]);
+}
+
+async function askApp(fresh, referrer) {
+  const asked = [];
+  for (const item of fresh) {
+    let cookies = '';
+    try { cookies = HaulRequest.cookieHeader(await api.cookies.getAll({ url: item.url })); } catch { /* no cookie permission */ }
+    asked.push({ url: item.url, kind: item.kind, cookies });
+  }
+  const result = await post('/inspect', { items: asked, referrer, userAgent: navigator.userAgent });
+  for (const item of fresh) inspecting.delete(item.url);
+  // Not asked again: an item the app could not answer for is simply left unknown.
+  for (const item of fresh) inspected.set(item.url, null);
+  if (result.ok && Array.isArray(result.json)) for (const info of result.json) inspected.set(info.url, info);
+}
+
+/// The items with what is known about them: length, picture size, which tracks, whether live.
+function withInspection(items) {
+  return items.map((item) => {
+    const info = inspected.get(item.url);
+    if (!info) return item;
+    const known = {};
+    for (const key of ['duration', 'video', 'audio', 'width', 'height', 'live', 'error']) if (info[key] != null && item[key] == null) known[key] = info[key];
+    return { ...item, ...known };
+  });
+}
+
 /// What the page's own source says about its video: muxed progressive files the sniffer never sees as one request,
 /// Facebook's signed-in and signed-out pages both embed their DASH representation table, so no extra fetch is needed.
 async function pageItems(tabId, tabUrl) {
   const scan = async () => {
     const scanned = await api.tabs.sendMessage(tabId, { type: 'scan' }, { frameId: 0 });
-    return Array.isArray(scanned) ? scanned : [];
+    // { items, playing, ogTitle }; an older content script answered with the items alone.
+    if (Array.isArray(scanned)) return { items: scanned, playing: [] };
+    return scanned && Array.isArray(scanned.items) ? scanned : { items: [], playing: [] };
   };
   try {
     return await scan();
@@ -212,7 +272,7 @@ async function pageItems(tabId, tabUrl) {
       await api.scripting.executeScript({ target: { tabId, frameIds: [0] }, files: ['lib/links.js', 'lib/media.js', 'content.js'] });
       return await scan();
     } catch {
-      return [];
+      return { items: [], playing: [] };
     }
   }
 }
@@ -228,14 +288,24 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const s = await settings();
         const tabId = message.tabId;
         let items = tabId != null ? HaulMedia.tidyMedia(mediaByTab.get(tabId) || []) : [];
+        let pageTitle = message.tabTitle;
         if (state.media && tabId != null) {
-          const fromPage = (await pageItems(tabId, message.tabUrl)).filter((i) => !HaulMedia.isAdHost(i.url));
+          const scanned = await pageItems(tabId, message.tabUrl);
+          const fromPage = scanned.items.filter((i) => !HaulMedia.isAdHost(i.url));
           const sniffedUrls = items.map((i) => i.url);
           const dash = HaulMedia.labelDashItems(fromPage.filter((i) => i.kind === 'dash'), sniffedUrls, HaulMedia.pageVideoId(message.tabUrl || ''));
           const reader = HaulMedia.pageReaderItem(message.tabUrl || '');
-          items = (reader ? [reader] : []).concat(dash).concat(fromPage.filter((i) => i.kind !== 'dash')).concat(items);
+          // Anything still unread is read now; the app answers within a few seconds with what it has.
+          await inspectItems(items.concat(fromPage), message.tabUrl);
+          const known = withInspection(fromPage.filter((i) => i.kind !== 'dash').concat(items));
+          // Joined pairs first, then the item the visible video is playing, labelled so.
+          const ordered = HaulMedia.labelPlaying(HaulMedia.markPlaying(HaulMedia.pairTracks(known), scanned.playing));
+          // Live streams, and items Haul itself could not fetch (a one-time link the player already used), go last.
+          const last = (i) => i.live || i.error;
+          items = (reader ? [reader] : []).concat(dash).concat(ordered.filter((i) => !last(i))).concat(ordered.filter(last));
+          pageTitle = HaulMedia.bestTitle(message.tabTitle, scanned.ogTitle);
         }
-        return { ...state, capture: s.capture, port: s.port, media: state.media, items };
+        return { ...state, capture: s.capture, port: s.port, media: state.media, items, pageTitle };
       }
       case 'pair': return pair();
       case 'download': return handOver(message.url, { referrer: message.referrer || (sender.tab && sender.tab.url), pageTitle: message.pageTitle || (sender.tab && sender.tab.title) });

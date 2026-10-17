@@ -79,15 +79,20 @@ try {
   const tab = JSON.parse(tabs.result.result.value).find((t) => t.url && !t.url.startsWith('chrome-extension:') && t.url !== 'about:blank');
   if (!tab) throw new Error('could not find the page tab');
   console.log('page title:', tab.title, '| url:', tab.url);
-  const state = await ask({ type: 'status', tabId: tab.id, tabUrl: tab.url });
+  const state = await ask({ type: 'status', tabId: tab.id, tabUrl: tab.url, tabTitle: tab.title });
   console.log(`sniffed ${state.items.length} item(s):`);
-  for (const item of state.items) console.log(`  ${item.kind}  ${item.label || item.contentType || '-'}  ${item.size || '?'}  ${item.url.slice(0, 100)}`);
-  const pick = state.items.find((i) => i.kind === 'page') || state.items.find((i) => i.kind === 'dash' && /^This video/.test(i.label || '')) || state.items.find((i) => i.kind === 'dash')
-    || state.items.find((i) => i.kind === 'hls' || i.kind === 'mpd') || state.items.filter((i) => i.kind === 'file').sort((a, b) => (b.size || 0) - (a.size || 0))[0];
+  const known = (i) => [i.duration ? `${Math.round(i.duration)}s` : '', i.width ? `${i.width}x${i.height}` : '', i.video === undefined ? '' : `video:${i.video}`, i.audio === undefined ? '' : `sound:${i.audio}`, i.live ? 'LIVE' : '', i.error ? `UNOPENABLE (${i.error})` : ''].filter(Boolean).join(' ');
+  for (const item of state.items) console.log(`  ${item.playing ? '▶' : ' '} ${item.kind}  ${item.label || item.contentType || '-'}  ${known(item)}  ${item.url.slice(0, 90)}`);
+  console.log('page title:', state.pageTitle);
+  // What a person would press: the video they are watching, when Haul can tell; else the best of the rest.
+  // Items the popup shows as live or as a link Haul cannot open are not ones a person would press.
+  const usable = state.items.filter((i) => !i.live && !i.error);
+  const pick = usable.find((i) => i.playing) || usable.find((i) => i.kind === 'page') || usable.find((i) => i.kind === 'dash' && /^This video/.test(i.label || '')) || usable.find((i) => i.kind === 'dash')
+    || usable.find((i) => i.kind === 'hls' || i.kind === 'mpd') || usable.filter((i) => i.kind === 'file').sort((a, b) => (b.size || 0) - (a.size || 0))[0];
   if (!pick) throw new Error('nothing to grab');
   console.log('grabbing', pick.kind, pick.url.slice(0, 120));
   const before = new Set(library().map((d) => d.id));
-  const grabbed = await ask({ type: 'grab', item: pick, referrer: tab.url, pageTitle: tab.title });
+  const grabbed = await ask({ type: 'grab', item: pick, referrer: tab.url, pageTitle: state.pageTitle || tab.title });
   console.log('grab', JSON.stringify(grabbed));
   if (!grabbed.ok) throw new Error('grab refused');
   if (!(await pressStart())) throw new Error('the catch panel never offered Start (its error, if any, is on screen)');

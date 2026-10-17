@@ -221,3 +221,77 @@ test('a flood of segments never pushes the stream out of the list', () => {
   assert.equal(list[4].url, 'https://c.com/seg_39.m4v');
   assert.equal(recordMedia(list, { kind: 'mpd', url: 'https://c.com/v.mpd' }, 5), false, 'a repeat is not recorded twice');
 });
+
+const { rangeTotal, bestTitle, markPlaying, pairTracks, labelPlaying } = require('./media.js');
+
+test('a refused response is not offered, and a track fetched in pieces is a whole file', () => {
+  // Dailymotion's player asks a director that answers 403, then fetches the real playlist elsewhere.
+  assert.equal(classifyResponse('https://cdndirector.dailymotion.com/cdn/manifest/video/x.m3u8', 'text/html', { status: 403 }), null);
+  assert.equal(classifyResponse('https://dmxleo.dailymotion.com/cdn/manifest/video/x.m3u8', 'application/xml', { status: 200 }), 'hls');
+  // Bilibili fetches each whole track as .m4s in byte ranges; a template's segments carry no total, or a small one.
+  assert.equal(classifyResponse('https://upos.bilivideo.com/x/123-1-30080.m4s?e=1', 'video/mp4', { status: 206, range: 'bytes 0-1023/48211234' }), 'file');
+  assert.equal(classifyResponse('https://c.com/v/seg_12.m4s', 'video/mp4', { status: 200 }), null);
+  assert.equal(classifyResponse('https://c.com/v/seg_12.m4s', 'video/iso.segment', { status: 206, range: 'bytes 0-999/40000' }), null);
+  assert.equal(rangeTotal('bytes 0-1023/48211234'), 48211234);
+  assert.equal(rangeTotal('bytes 0-1023/*'), undefined);
+});
+
+test('the page title, unless it is only the site name', () => {
+  assert.equal(bestTitle('X', 'NASA on X: "Two jets over the Mojave"'), 'NASA on X: "Two jets over the Mojave"');
+  assert.equal(bestTitle('Instagram', 'NASA on Instagram: "Saturn"'), 'NASA on Instagram: "Saturn"');
+  assert.equal(bestTitle('Natiming sa checkpoint | TikTok', 'Mel Palm on TikTok'), 'Natiming sa checkpoint | TikTok');
+  assert.equal(bestTitle('demo - Twitch', 'Twitch'), 'demo - Twitch');
+  assert.equal(bestTitle('', 'Only og'), 'Only og');
+});
+
+test('a direct player is matched by its source', () => {
+  // Reddit's post plays its packaged MP4 directly; a promoted video streams from the same CDN beside it.
+  const items = [
+    { kind: 'hls', url: 'https://v.redd.it/ad123/HLSPlaylist.m3u8?f=hd', duration: 111 },
+    { kind: 'file', url: 'https://packaged-media.redd.it/post/pb/m2-res_600p.mp4?m=DASHPlaylist.mpd', duration: 39, video: true, audio: true },
+  ];
+  const marked = markPlaying(items, [{ src: 'https://packaged-media.redd.it/post/pb/m2-res_600p.mp4?m=DASHPlaylist.mpd', duration: 39, width: 480, height: 600 }]);
+  assert.equal(marked[0].url, items[1].url);
+  assert.ok(marked[0].playing);
+  assert.ok(!marked[1].playing);
+});
+
+test('a blob: player is matched by its length, not by being the biggest file', () => {
+  // TikTok: the page's 6-second video, and a 74-second neighbour the feed preloaded, which is larger.
+  const items = [
+    { kind: 'file', url: 'https://v16.tiktok.com/neighbour.mp4', duration: 73.8, video: true, audio: true, width: 720, height: 1280, size: 5641950 },
+    { kind: 'file', url: 'https://v16.tiktok.com/this.mp4', duration: 6.2, video: true, audio: true, width: 720, height: 1280, size: 435019 },
+  ];
+  const marked = markPlaying(items, [{ src: 'blob:https://www.tiktok.com/abc', duration: 6, width: 720, height: 1280 }]);
+  assert.equal(marked[0].url, 'https://v16.tiktok.com/this.mp4');
+  assert.ok(marked[0].playing);
+  assert.deepEqual(markPlaying(items, []), items, 'nothing playing, nothing marked');
+  assert.ok(!markPlaying(items, [{ src: 'blob:x', duration: 300 }]).some((i) => i.playing), 'no length matches, nothing marked');
+});
+
+test('silent video and its sound are paired, and the pair is what plays', () => {
+  // Instagram: video-only tracks at two sizes and one audio-only track of the same length, plus a neighbour's.
+  const items = [
+    { kind: 'file', url: 'https://ig/v360.mp4', duration: 43.8, video: true, audio: false, width: 360, height: 640, size: 900000 },
+    { kind: 'file', url: 'https://ig/v720.mp4', duration: 43.7, video: true, audio: false, width: 718, height: 1276, size: 1295721 },
+    { kind: 'file', url: 'https://ig/a.mp4', duration: 43.8, video: false, audio: true, size: 700000 },
+    { kind: 'file', url: 'https://ig/other-a.mp4', duration: 12, video: false, audio: true },
+  ];
+  const paired = pairTracks(items);
+  assert.equal(paired[0].kind, 'dash');
+  assert.equal(paired[0].url, 'https://ig/v720.mp4', 'the larger picture');
+  assert.equal(paired[0].audioUrl, 'https://ig/a.mp4');
+  assert.equal(paired.filter((i) => i.kind === 'dash').length, 1, 'one pair per video, not per size');
+  const playing = labelPlaying(markPlaying(paired, [{ src: 'blob:https://www.instagram.com/x', duration: 43.7, width: 718, height: 1276 }]));
+  assert.equal(playing[0].kind, 'dash');
+  assert.equal(playing[0].label, 'Playing now · video + sound · 718×1276 · 0:44');
+  assert.deepEqual(describeMedia(playing[0]).title, 'Playing now · video + sound · 718×1276 · 0:44');
+});
+
+test('what Haul learned shows in the list', () => {
+  assert.equal(describeMedia({ kind: 'file', url: 'https://c.com/v.mp4', contentType: 'video/mp4', video: true, audio: false, width: 1280, height: 720, duration: 65 }).title,
+    'Video (mp4) · no sound · 1280×720 · 1:05');
+  assert.equal(describeMedia({ kind: 'file', url: 'https://c.com/a.mp4', contentType: 'video/mp4', video: false, audio: true, duration: 3725 }).title, 'Audio (mp4) · 1:02:05');
+  assert.equal(describeMedia({ kind: 'hls', url: 'https://c.com/live.m3u8', live: true }).title, 'Live stream · cannot be saved');
+  assert.equal(describeMedia({ kind: 'hls', url: 'https://c.com/once.m3u8', error: 'The server answered 403' }).title, 'Stream · Haul cannot open this link');
+});

@@ -14,12 +14,23 @@
     return dot < 0 ? '' : last.slice(dot + 1).toLowerCase();
   }
 
-  // 'hls' | 'mpd' | 'file' | null
-  function classifyResponse(url, contentType) {
+  // The whole length behind a Content-Range ("bytes 0-999/123456"), when the server says it.
+  function rangeTotal(contentRange) {
+    const m = /\/(\d+)\s*$/.exec(contentRange || '');
+    return m ? Number(m[1]) : undefined;
+  }
+
+  // A track fetched in pieces is a whole file, not a stream segment, once its total is known and real (Bilibili's .m4s).
+  const WHOLE_TRACK_MIN = 1 << 20;
+
+  // 'hls' | 'mpd' | 'file' | null. `response` is { status, range } (its Content-Range), when known.
+  function classifyResponse(url, contentType, response = {}) {
+    if (response.status >= 400) return null;   // a refused request is not something to offer
     const type = (contentType || '').split(';')[0].trim().toLowerCase();
     const ext = extensionOf(url);
     if (ext === 'm3u8' || HLS_TYPES.includes(type)) return 'hls';
     if (ext === 'mpd' || DASH_TYPES.includes(type)) return 'mpd';
+    if (ext === 'm4s' && (rangeTotal(response.range) || 0) >= WHOLE_TRACK_MIN) return 'file';
     if (SEGMENT_EXTENSIONS.has(ext) || SEGMENT_TYPES.includes(type)) return null;
     if (type.startsWith('video/') || type.startsWith('audio/')) return 'file';
     if (FILE_EXTENSIONS.has(ext)) return 'file';
@@ -220,14 +231,18 @@
       name = decodeURIComponent(u.pathname.slice(u.pathname.lastIndexOf('/') + 1));
     } catch { name = item.url; }
     if ((item.kind === 'dash' || item.kind === 'page') && item.videoId) name = `video ${item.videoId}`;
+    const shape = [item.width && item.height ? `${item.width}×${item.height}` : '', item.duration ? clock(item.duration) : ''].filter(Boolean).join(' · ');
     const type = (item.contentType || '').split(';')[0].trim().toLowerCase();
     const format = type.split('/')[1] || extensionOf(item.url);
     let title;
-    if (item.label) title = item.label + (item.duration ? ` · ${Math.floor(item.duration / 60)}:${String(Math.round(item.duration % 60)).padStart(2, '0')}` : '');
-    else if (item.kind === 'hls') title = 'Stream (HLS)';
-    else if (item.kind === 'mpd') title = 'Stream (DASH)';
-    else if (type.startsWith('audio/')) title = `Audio (${format})`;
-    else title = format ? `Video (${format})` : 'Video';
+    if (item.label) title = item.label + (item.duration && !item.shaped ? ` · ${clock(item.duration)}` : '');
+    else if (item.live) title = 'Live stream · cannot be saved';
+    else if (item.error) title = `${item.kind === 'file' ? 'Video' : 'Stream'} · Haul cannot open this link`;
+    else if (item.kind === 'hls') title = 'Stream (HLS)' + (shape ? ` · ${shape}` : '');
+    else if (item.kind === 'mpd') title = 'Stream (DASH)' + (shape ? ` · ${shape}` : '');
+    else if (item.video === false && item.audio) title = `Audio (${format || 'mp4'})` + (shape ? ` · ${shape}` : '');
+    else if (type.startsWith('audio/') && item.video !== true) title = `Audio (${format})`;
+    else title = (format ? `Video (${format})` : 'Video') + (item.video && item.audio === false ? ' · no sound' : '') + (shape ? ` · ${shape}` : '');
     // A playlist's own size says nothing about the video it describes.
     if (!item.label && item.size && item.kind === 'file') title += ` · ${formatSize(item.size)}`;
     return { title, subtitle: [host, name].filter(Boolean).join(' · ') };
@@ -288,7 +303,74 @@
     return true;
   }
 
-  const api = { classifyResponse, describeMedia, formatSize, normaliseMediaURL, findInPage, findDashSets, pageVideoId, parseMPD, labelDashItems, pageReaderItem,
+  function clock(seconds) {
+    const s = Math.round(seconds);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = String(s % 60).padStart(2, '0');
+    return h ? `${h}:${String(m).padStart(2, '0')}:${r}` : `${m}:${r}`;
+  }
+
+  // The tab's title, unless it is only the site's name ("X", "Instagram"): then the page's own og:title says more.
+  function bestTitle(tabTitle, ogTitle) {
+    const tab = (tabTitle || '').trim(), og = (ogTitle || '').trim();
+    const bare = !/\s/.test(tab.replace(/\s*[-|·]\s*[^-|·]+$/, '').trim());
+    return bare && og.length > tab.length ? og : tab || og;
+  }
+
+  // Lengths agree when within a second, or 3% for long videos: players round, and trims differ slightly.
+  function sameLength(a, b) {
+    return a > 0 && b > 0 && Math.abs(a - b) <= Math.max(1, 0.03 * Math.max(a, b));
+  }
+
+  // Which item is the video being watched: the one a visible playing <video> plays, by its source when it names one,
+  // else (a blob: player) by length, then by picture size. `playing` is what the content script reports, best first.
+  function markPlaying(items, playing) {
+    const watched = (playing || [])[0];
+    if (!watched) return items;
+    const bySource = watched.src && !watched.src.startsWith('blob:') ? normaliseMediaURL(watched.src) : null;
+    let match = bySource ? items.find((i) => normaliseMediaURL(i.url) === bySource) : null;
+    if (!match && watched.duration) {
+      const candidates = items.filter((i) => !i.live && i.video !== false && sameLength(i.duration, watched.duration));
+      // A pair with sound beats its silent half; the same picture size beats another.
+      const sameSize = (i) => i.width === watched.width && i.height === watched.height;
+      candidates.sort((a, b) => ((b.kind === 'dash') - (a.kind === 'dash')) || (sameSize(b) - sameSize(a)) || ((b.size || 0) - (a.size || 0)));
+      match = candidates[0];
+    }
+    if (!match) return items;
+    // A silent file that is the playing one hands "playing" to the pair that carries its sound.
+    const pair = match.kind === 'file' ? items.find((i) => i.kind === 'dash' && i.url === match.url) : null;
+    const chosen = pair || match;
+    return [{ ...chosen, playing: true }].concat(items.filter((i) => i !== chosen));
+  }
+
+  // A video-only file and an audio-only file of the same length are one video whose sound comes apart (Instagram,
+  // Bilibili, any DASH site serving whole tracks): offered joined, ahead of its halves.
+  function pairTracks(items) {
+    const silent = items.filter((i) => i.kind === 'file' && i.video === true && i.audio === false && i.duration);
+    const sound = items.filter((i) => i.kind === 'file' && i.video === false && i.audio === true && i.duration);
+    const pairs = [];
+    for (const v of silent) {
+      const a = sound.filter((s) => sameLength(s.duration, v.duration)).sort((x, y) => (y.size || 0) - (x.size || 0))[0];
+      if (!a) continue;
+      pairs.push({ kind: 'dash', url: v.url, audioUrl: a.url, duration: v.duration, width: v.width, height: v.height, video: true, audio: true,
+        label: ['Video + sound', v.width && v.height ? `${v.width}×${v.height}` : '', clock(v.duration)].filter(Boolean).join(' · '), shaped: true });
+    }
+    // Several silent sizes of one video share their sound: keep the largest picture for each length.
+    pairs.sort((a, b) => (b.width || 0) * (b.height || 0) - (a.width || 0) * (a.height || 0));
+    const kept = pairs.filter((p, index) => pairs.findIndex((q) => sameLength(q.duration, p.duration)) === index);
+    return kept.concat(items);
+  }
+
+  // The playing item, labelled as such, so the popup lists it first under "From this page".
+  function labelPlaying(items) {
+    return items.map((i) => {
+      if (!i.playing) return i;
+      const shape = [i.width && i.height ? `${i.width}×${i.height}` : '', i.duration ? clock(i.duration) : ''].filter(Boolean).join(' · ');
+      const what = i.kind === 'dash' ? 'video + sound' : i.kind === 'hls' || i.kind === 'mpd' ? 'stream' : i.audio === false ? 'no sound' : '';
+      return { ...i, label: ['Playing now', what, shape].filter(Boolean).join(' · '), shaped: true };
+    });
+  }
+
+  const api = { classifyResponse, describeMedia, rangeTotal, bestTitle, sameLength, markPlaying, pairTracks, labelPlaying, formatSize, normaliseMediaURL, findInPage, findDashSets, pageVideoId, parseMPD, labelDashItems, pageReaderItem,
     hlsChildren, isAdHost, tidyMedia, recordMedia };
   root.HaulMedia = api;
   if (typeof module !== 'undefined') module.exports = api;
