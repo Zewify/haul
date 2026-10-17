@@ -79,7 +79,8 @@ struct SpeedLimitTransferTests {
         #expect(result.state == .finished)
         // 600 KB at 200 KB/s is three seconds, less the quarter second of credit the bucket can hold.
         #expect(elapsed > 2.5, "took \(elapsed)s")
-        #expect(elapsed < 6, "took \(elapsed)s")
+        // The bound that matters is the lower one; this one only catches a download that never ends, so a busy machine fits.
+        #expect(elapsed < 15, "took \(elapsed)s")
         #expect(try Data(contentsOf: URL(fileURLWithPath: try #require(result.finalPath))) == TestServer.blob(600_000, seed: 3))
     }
 

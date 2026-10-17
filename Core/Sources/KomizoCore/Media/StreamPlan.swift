@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// One piece of a stream to fetch: its URL, the bytes of it when it is a range of a bigger file, and how it is encrypted.
 public struct StreamSegment: Hashable, Sendable {
@@ -54,6 +55,8 @@ public struct StreamPlan: Hashable, Sendable {
     }
 }
 
+private let streamLog = Logger(subsystem: "com.zewify.komizo", category: "stream")
+
 /// Fetches playlists, manifests, keys and segments with the browser's headers, retrying what a retry can fix,
 /// within the speed limit when there is one.
 public struct MediaFetcher: Sendable {
@@ -101,7 +104,11 @@ public struct MediaFetcher: Sendable {
                         }
                     }
                 }
-                guard let http = response else { throw DownloadFailure("Not an HTTP response.") }
+                // A cancelled read ends quietly, as an async stream does, with whatever had arrived: that is a pause or a
+                // cancel, never a finished segment. Once paused mid-segment, the cut-off body was saved as if whole.
+                try Task.checkCancellation()
+                // No response and no cancellation: the connection went away before any headers. Worth another try.
+                guard let http = response else { throw RetryableError(status: 0) }
                 switch http.statusCode {
                 case 206: return data
                 case 200...299:
@@ -120,6 +127,8 @@ public struct MediaFetcher: Sendable {
                 // A pause cancels the request mid-flight; URLSession reports that as a network error, not a cancellation.
                 if Task.isCancelled { throw CancellationError() }
                 guard attempt < retryDelays.count else { throw DownloadFailure("Gave up on \(url.lastPathComponent): \(error.localizedDescription)") }
+                // So a stalled stream says what each piece was doing: log stream --predicate 'subsystem == "com.zewify.komizo"'.
+                streamLog.notice("\(url.host ?? "", privacy: .public) \(url.lastPathComponent, privacy: .public) retry \(attempt + 1): \(String(describing: error), privacy: .public)")
                 try await Task.sleep(for: .seconds(retryDelays[attempt]))
                 attempt += 1
             }
