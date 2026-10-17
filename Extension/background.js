@@ -239,9 +239,11 @@ async function askApp(fresh, referrer) {
   }
   const result = await post('/inspect', { items: asked, referrer, userAgent: navigator.userAgent });
   for (const item of fresh) inspecting.delete(item.url);
-  // Not asked again: an item the app could not answer for is simply left unknown.
+  // Only an answer counts. A refused request (not yet connected: 401) or no app at all leaves the items unasked,
+  // so the next popup asks again; once answered, an item the app could not read is left unknown for good.
+  if (!result.ok || !Array.isArray(result.json)) return;
   for (const item of fresh) inspected.set(item.url, null);
-  if (result.ok && Array.isArray(result.json)) for (const info of result.json) inspected.set(info.url, info);
+  for (const info of result.json) inspected.set(info.url, info);
 }
 
 /// The items with what is known about them: length, picture size, which tracks, whether live.
