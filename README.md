@@ -15,7 +15,11 @@ It takes the downloads your browser starts and fetches them over several connect
 Haul needs macOS 15 or later.
 Installation instructions live at https://zewify.com/haul/.
 
-The Chrome extension is the `Extension` folder of this repo: open `chrome://extensions`, turn on Developer mode, choose Load unpacked, and pick that folder.
+The install command also puts the Chrome extension in `~/Library/Application Support/Haul/Extension`.
+Open `chrome://extensions`, turn on Developer mode, click Load unpacked, press ⌘⇧G, paste that path and choose the folder; Haul's Settings, under Browser, copies the path.
+Each update replaces that folder in place, so press the reload arrow on Haul's card in `chrome://extensions` afterwards.
+Haul is not on the Chrome Web Store, by choice; this is how the extension is installed.
+Built from source, the extension is this repo's `Extension` folder.
 Safari's copy is inside the app; turn it on in Safari → Settings → Extensions.
 
 ## Build from source

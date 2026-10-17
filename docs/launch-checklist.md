@@ -14,7 +14,7 @@ What is left before Haul can ship. Tick items here rather than tracking them els
 
 ## Extensions
 
-- [ ] Chrome Web Store developer account, listing, screenshots, privacy disclosure for `<all_urls>` and `cookies` (needed to download files behind logins).
+- [x] No Chrome Web Store (owner, 2026-10-17): the extension is loaded unpacked. From 0.2.1 the release carries it and the install command puts it in `~/Library/Application Support/Haul/Extension`, replaced in place by each update; Settings → Browser copies the path.
 - [ ] Safari: test the packaged extension (it ships inside the app, ad hoc signed); confirm the content-script capture, the context menus and the video popup.
 - [ ] Firefox, if asked for.
 
