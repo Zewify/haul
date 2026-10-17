@@ -2,7 +2,7 @@
 
 A free Mac download manager in the mould of Internet Download Manager, by Zewify: a browser extension hands downloads to the app, which fetches them over several connections, resumes them, queues them, and grabs video from pages.
 Free and published from zewify.com (owner's decision, 2026-10-14): no Pro tier, no Mac App Store edition, one build with everything in it.
-Named Downhaul on 2026-10-17; it was Haul until 0.2.1, renamed because another free Mac download manager called Haul (github.com/sibiraj-s/haul) had launched on 2026-10-01. The design and plan docs below kept the old name. A desk search found no app or project using "Downhaul"; a lawyer's clearance search is still owed. Old `zewify.com/haul/` links and the old install command redirect to Downhaul's, and the installer removes an old Haul.app.
+Named Downhaul on 2026-10-17; it was Haul until 0.2.1, renamed because another free Mac download manager called Haul (github.com/sibiraj-s/haul) had launched on 2026-10-01. The design and plan docs below kept the old name. A desk search found no app or project using "Downhaul"; the owner chose no lawyer's clearance search (free, not promoted; revisit if it is ever sold). Old `zewify.com/haul/` links and the old install command redirect to Downhaul's, and the installer removes an old Haul.app.
 Design: `docs/superpowers/specs/2026-10-13-haul-design.md`. Plan: `docs/superpowers/plans/2026-10-13-haul.md`. Launch work: `docs/launch-checklist.md`.
 
 ## Layout

@@ -5,7 +5,7 @@ What is left before Downhaul can ship. Tick items here rather than tracking them
 ## Decided
 
 - [x] Free, one build, published from zewify.com the way PortGlimpse is (owner, 2026-10-14): ad hoc signed, installed with a curl command, source available on GitHub. No Pro, no App Store.
-- [x] The name (2026-10-17): Downhaul, chosen by the owner after a desk search found another free Mac download manager called Haul (github.com/sibiraj-s/haul, from 2026-10-01) and no app or project called Downhaul, and Zewify/downhaul free. Not checked: the trademark registers themselves (USPTO, EUIPO, IPOPHL could not be queried); a lawyer's clearance search before money is spent on the name.
+- [x] The name (2026-10-17): Downhaul, chosen by the owner after a desk search found another free Mac download manager called Haul (github.com/sibiraj-s/haul, from 2026-10-01) and no app or project called Downhaul, and Zewify/downhaul free. No lawyer's clearance search (owner, 2026-10-17): Downhaul is free and not promoted, so the realistic worst case is being asked to rename, which the 0.3.0 rename showed takes an afternoon. Revisit if it is ever sold or promoted.
 - [ ] Whether "ask before starting" stays on by default.
 
 ## Distribution
