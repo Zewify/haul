@@ -28,7 +28,9 @@ What is left before Haul can ship. Tick items here rather than tracking them els
   - dash.js reference (Akamai MPD, `$Number$` template): 10.5 min 3840x2160 H.264 + AAC, 939 MB; it was one unplayable fragment before.
   - hls.js demo (muxed HLS): 1080p with sound. Internet Archive (MP4) and w3schools (`<video>`): whole files with sound.
   - Vimeo: refused, "This video is protected (DRM) and cannot be saved." Its manifests carry CENC with Widevine and PlayReady.
-- [ ] Grabber: Reddit, X and Instagram are untested (Reddit refuses a plain fetch, so it needs a signed-in browser run). Vimeo shows its two manifests (720p cap and full) as two identical rows.
+- [x] Grabber: popular sites, each grab checked by its file's tracks and a frame against the page (2026-10-17, signed out, Chrome for Testing): Reddit (the post, not the ad beside it), TikTok (the page's video, not a larger feed neighbour), X (the tweet's video, not a GIF clip), Instagram and Bilibili (video and sound joined), Twitch, Vimeo (non-DRM), Facebook. Rumble's live channel is refused as live.
+- [ ] Grabber: Dailymotion is unverified. In Chrome for Testing its own player gets 403 on the video and plays only ads, so it needs a run in a real browser. Vimeo shows its two manifests (720p cap and full) as two identical rows.
+- [ ] Grabber: signed-in pages (Instagram, Facebook and X feeds) are untested.
 - [ ] Grabber: the catch panel for media should show which item is which (HD with audio, SD, stream) and let the user pick; today the popup shows the list and the panel shows one.
 - [ ] Grabber: Facebook names. The page title is "Facebook" when signed in, so files are "Facebook <video id>.mp4"; the caption is only in the crawler-served page. Decide whether to fetch the caption (one more page load as a crawler) or let the user rename in the panel.
 - [ ] Grabber: YouTube is out of scope. Its streams are DASH with signed, throttled, frequently re-encrypted URLs that need a maintained extractor (yt-dlp carries thousands of lines for it), its terms forbid it, and Apple rejects it; say so in the popup instead of showing silent tracks.
