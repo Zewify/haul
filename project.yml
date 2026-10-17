@@ -11,8 +11,8 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    MARKETING_VERSION: "0.2.0"
-    CURRENT_PROJECT_VERSION: "2"
+    MARKETING_VERSION: "0.2.1"
+    CURRENT_PROJECT_VERSION: "3"
     MACOSX_DEPLOYMENT_TARGET: "15.0"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     DEAD_CODE_STRIPPING: YES
@@ -88,12 +88,25 @@ targets:
         buildPhase: resources
       - path: Extension/options.js
         buildPhase: resources
-      - path: Extension/lib
-        type: folder
-        buildPhase: resources
       - path: Extension/icons
         type: folder
         buildPhase: resources
+    # lib is copied by a script, so a new file is never missed, but without its node tests, which are not part of
+    # the extension. Xcode's script sandbox only lets a script read files declared one by one, which would miss new
+    # ones, so it is off for this target alone (in its settings below); the script is the repo's own and fails the
+    # build on any error.
+    postBuildScripts:
+      - name: Copy the extension's lib without its tests
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          rm -rf "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/lib"
+          mkdir -p "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/lib"
+          for file in "$SRCROOT"/Extension/lib/*.js; do
+            case "$file" in *.test.js) continue ;; esac
+            cp "$file" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/lib/"
+          done
+          [ -f "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/lib/media.js" ]
     info:
       path: SafariExtension/Info.plist
       properties:
@@ -113,6 +126,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.zewify.haul.safari
         PRODUCT_NAME: HaulSafari
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
         ENABLE_HARDENED_RUNTIME: YES
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES

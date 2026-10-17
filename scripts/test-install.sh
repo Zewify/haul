@@ -44,11 +44,16 @@ pass() { printf 'ok   %s\n' "$1"; }
 fail() { printf 'FAIL %s\n' "$1"; failures=$((failures + 1)); }
 
 # A fake release: a minimal Haul.app whose Info.plist carries the version.
-release() { # version [bad-sum] [no-assets]
+release() { # version [bad-sum] [no-assets] [with-extension]
   local version=$1 dir="$work/build-$1"
-  rm -rf "$dir"; mkdir -p "$dir/Haul.app/Contents"
-  printf '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>%s</string></dict></plist>' "$version" > "$dir/Haul.app/Contents/Info.plist"
-  (cd "$dir" && ditto -c -k --keepParent Haul.app "$work/site/Haul-$version.zip")
+  rm -rf "$dir"; mkdir -p "$dir/stage/Haul.app/Contents"
+  printf '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>%s</string></dict></plist>' "$version" > "$dir/stage/Haul.app/Contents/Info.plist"
+  if [ "${4:-}" = with-extension ]; then
+    mkdir -p "$dir/stage/Extension"
+    printf '{"name":"Haul","version":"%s"}' "$version" > "$dir/stage/Extension/manifest.json"
+    echo "only in $version" > "$dir/stage/Extension/only-$version.js"
+  fi
+  (cd "$dir/stage" && ditto -c -k . "$work/site/Haul-$version.zip")
   local sum; sum=$(shasum -a 256 "$work/site/Haul-$version.zip" | cut -d' ' -f1)
   [ "${2:-}" = bad-sum ] && sum=0000000000000000000000000000000000000000000000000000000000000000
   printf '%s  Haul-%s.zip\n' "$sum" "$version" > "$work/site/Haul-$version.zip.sha256"
@@ -59,7 +64,7 @@ release() { # version [bad-sum] [no-assets]
   printf '{\n  "tag_name": "v%s",\n  "name": "Haul %s",\n  "assets": %s\n}\n' "$version" "$version" "$assets" > "$work/site/release.json"
 }
 
-run_install() { HAUL_API="http://127.0.0.1:$port/release.json" HAUL_INSTALL_DIR="$work/Apps" HAUL_NO_LAUNCH=1 sh "$INSTALL" >"$work/out.txt" 2>&1; }
+run_install() { HAUL_API="http://127.0.0.1:$port/release.json" HAUL_INSTALL_DIR="$work/Apps" HAUL_EXTENSION_DIR="$work/Support/Haul/Extension" HAUL_NO_LAUNCH=1 sh "$INSTALL" >"$work/out.txt" 2>&1; }
 installed_version() { /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$work/Apps/Haul.app/Contents/Info.plist" 2>/dev/null || echo none; }
 
 release 1.0.0
@@ -169,6 +174,16 @@ if curl -fsSL "file://$INSTALL" | HAUL_API="http://127.0.0.1:$port/release.json"
   && [ "$(installed_version)" = 1.0.9 ] && grep -q "installed 1.0.9" "$work/out.txt"; then
   pass "piped into sh, as documented"
 else fail "piped: $(cat "$work/out.txt")"; fi
+
+# The Chrome extension: put in its fixed folder on the first install that carries it, replaced whole by the next,
+# and left alone by a release without one.
+ext="$work/Support/Haul/Extension"
+release 2.0.0 "" "" with-extension
+if run_install && [ -f "$ext/only-2.0.0.js" ] && grep -q "Load unpacked" "$work/out.txt"; then pass "the extension lands in its folder with how to add it"; else fail "extension install: $(cat "$work/out.txt")"; fi
+release 2.0.1 "" "" with-extension
+if run_install && [ -f "$ext/only-2.0.1.js" ] && [ ! -e "$ext/only-2.0.0.js" ] && grep -q "reload" "$work/out.txt" && [ ! -e "$ext.old" ] && [ ! -e "$ext.new" ]; then pass "an update replaces the extension whole"; else fail "extension update: $(ls "$ext" 2>&1) $(cat "$work/out.txt")"; fi
+release 2.0.2
+if run_install && [ "$(installed_version)" = 2.0.2 ] && [ -f "$ext/only-2.0.1.js" ]; then pass "a release without the extension leaves it alone"; else fail "no extension: $(cat "$work/out.txt")"; fi
 
 [ "$failures" -eq 0 ] || { echo "$failures installer test(s) failed"; exit 1; }
 echo "installer: all tests passed"

@@ -30,11 +30,17 @@ enum Format {
         return "\(Int((fraction * 100).rounded(.down)))%"
     }
 
+    /// The user's own home folder; inside the sandbox HOME is the app's container, so it comes from the passwd entry.
+    static var realHome: String? { getpwuid(getuid()).flatMap { String(validatingCString: $0.pointee.pw_dir) } }
+
+    /// Where the install command puts the Chrome extension, which Chrome loads unpacked (scripts/install.sh).
+    static var extensionFolder: String { (realHome ?? NSHomeDirectory()) + "/Library/Application Support/Haul/Extension" }
+
     /// A folder as a person would say it: "~/Downloads". Inside the sandbox HOME is the app's container, whose
     /// Downloads is a link to the real one, so the link is resolved and the real home comes from the passwd entry.
     static func folder(_ path: String) -> String {
         let resolved = (path as NSString).resolvingSymlinksInPath
-        if let home = getpwuid(getuid()).flatMap({ String(validatingCString: $0.pointee.pw_dir) }), resolved == home || resolved.hasPrefix(home + "/") {
+        if let home = realHome, resolved == home || resolved.hasPrefix(home + "/") {
             return "~" + resolved.dropFirst(home.count)
         }
         return (resolved as NSString).abbreviatingWithTildeInPath

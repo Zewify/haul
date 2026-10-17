@@ -7,6 +7,9 @@ set -eu
 
 API="${HAUL_API:-https://api.github.com/repos/zewify/haul/releases/latest}"
 APP="Haul.app"
+# Where the Chrome extension lives. Chrome loads it unpacked from here, so it stays at this path and each update
+# replaces it in place; a reload in chrome://extensions then picks up the new version.
+EXTENSION_DIR="${HAUL_EXTENSION_DIR:-$HOME/Library/Application Support/Haul/Extension}"
 BUNDLE_ID="com.zewify.haul"
 
 say() { printf 'Haul: %s\n' "$1"; }
@@ -121,9 +124,32 @@ main() {
   fi
 
   say "installed $version in $dest"
+  install_extension "$tmp/unpacked/Extension"
   if [ "${HAUL_NO_LAUNCH:-}" != "1" ]; then
     launch_app "$dest/$APP"
     say "it opens in a window and stays in your menu bar. Run the same command again to update."
+  fi
+}
+
+# Puts the Chrome extension from the release in EXTENSION_DIR, the same way as the app: new copy beside the old,
+# then a rename, so a failure leaves the previous one. A release without it (0.2.0 and earlier) changes nothing.
+install_extension() {
+  src=$1
+  [ -f "$src/manifest.json" ] || return 0
+  had=0; [ -e "$EXTENSION_DIR" ] && had=1
+  parent=$(dirname "$EXTENSION_DIR")
+  mkdir -p "$parent" || { say "couldn't create $parent, so the Chrome extension was not updated."; return 0; }
+  enew="$EXTENSION_DIR.new"; eold="$EXTENSION_DIR.old"
+  rm -rf "$enew" "$eold" 2>/dev/null || true
+  ditto "$src" "$enew" || { rm -rf "$enew" 2>/dev/null; say "couldn't write the Chrome extension to $parent."; return 0; }
+  if [ -e "$EXTENSION_DIR" ]; then mv "$EXTENSION_DIR" "$eold" || { rm -rf "$enew"; say "couldn't replace the Chrome extension in $parent."; return 0; }; fi
+  if ! mv "$enew" "$EXTENSION_DIR"; then [ -e "$eold" ] && mv "$eold" "$EXTENSION_DIR"; say "couldn't replace the Chrome extension in $parent."; return 0; fi
+  rm -rf "$eold" 2>/dev/null || true
+  if [ "$had" = 1 ]; then
+    say "updated the Chrome extension; press the reload arrow on Haul's card in chrome://extensions to use it."
+  else
+    say "the Chrome extension is in: $EXTENSION_DIR"
+    say "to add it, open chrome://extensions, turn on Developer mode, click Load unpacked, press Command-Shift-G, paste that path and choose the folder."
   fi
 }
 

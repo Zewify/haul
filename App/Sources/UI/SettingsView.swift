@@ -111,6 +111,7 @@ struct ConnectionSettings: View {
 
 struct BrowserSettings: View {
     @Environment(AppModel.self) private var model
+    @State private var copied = false
 
     var body: some View {
         Form {
@@ -128,7 +129,17 @@ struct BrowserSettings: View {
             Section("Install the extension") {
                 Group {
                     Text("Safari: the Haul extension comes with this app. Turn it on in Safari → Settings → Extensions.")
-                    Text("Chrome, Edge, Brave, Arc, Vivaldi: load the Extension folder unpacked from chrome://extensions with Developer mode on.")
+                    Text("Chrome, Edge, Brave, Arc, Vivaldi: open chrome://extensions, turn on Developer mode, click Load unpacked, press ⌘⇧G, paste this folder's path and choose it. After an update, press the reload arrow on Haul's card there.")
+                    LabeledContent("Extension folder") {
+                        HStack {
+                            Text(Format.folder(Format.extensionFolder)).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                            Button(copied ? "Copied" : "Copy Path") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(Format.extensionFolder, forType: .string)
+                                copied = true
+                            }
+                        }
+                    }
                     Text("Then open the extension's popup and press Connect to Haul. Downloads the browser starts are handed to Haul; links to files are caught as you click them.")
                         .foregroundStyle(.secondary)
                 }
