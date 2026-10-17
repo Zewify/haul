@@ -41,7 +41,7 @@ struct SpeedLimiterTests {
         #expect(abs(limiter.take(10_000) - 0.1) < 1e-9)
     }
 
-    @Test func changingTheCapAppliesToTheNextChunk() {
+    @Test func aNewCapAppliesFromTheNextChunk() {
         let clock = FakeClock()
         let limiter = SpeedLimiter(bytesPerSecond: 100_000, now: clock.now)
         limiter.bytesPerSecond = nil
