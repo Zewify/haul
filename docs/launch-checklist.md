@@ -10,12 +10,12 @@ What is left before Haul can ship. Tick items here rather than tracking them els
 
 ## Distribution
 
-- [ ] A daily update check against the GitHub release feed, as PortGlimpse's `UpdateChecker` does, with the install command shown when a newer release exists.
+- [x] A daily update check against the GitHub release feed, as PortGlimpse's `UpdateChecker` does (2026-10-17, from 0.2.0): the menu bar menu names a newer release and copies the install command; Settings → General turns it off.
 
 ## Extensions
 
 - [ ] Chrome Web Store developer account, listing, screenshots, privacy disclosure for `<all_urls>` and `cookies` (needed to download files behind logins).
-- [ ] Safari: test the packaged extension in a signed build; confirm the content-script capture and context menus; the store edition ships without the sniffer (`scripts/strip-media.sh`).
+- [ ] Safari: test the packaged extension (it ships inside the app, ad hoc signed); confirm the content-script capture, the context menus and the video popup.
 - [ ] Firefox, if asked for.
 
 ## Product
@@ -33,7 +33,7 @@ What is left before Haul can ship. Tick items here rather than tracking them els
 - [ ] Grabber: signed-in pages (Instagram, Facebook and X feeds) are untested.
 - [ ] Grabber: the catch panel for media should show which item is which (HD with audio, SD, stream) and let the user pick; today the popup shows the list and the panel shows one.
 - [ ] Grabber: Facebook names. The page title is "Facebook" when signed in, so files are "Facebook <video id>.mp4"; the caption is only in the crawler-served page. Decide whether to fetch the caption (one more page load as a crawler) or let the user rename in the panel.
-- [ ] Grabber: YouTube is out of scope. Its streams are DASH with signed, throttled, frequently re-encrypted URLs that need a maintained extractor (yt-dlp carries thousands of lines for it), its terms forbid it, and Apple rejects it; say so in the popup instead of showing silent tracks.
+- [x] Grabber: YouTube is out of scope. Its streams are DASH with signed, throttled, frequently re-encrypted URLs that need a maintained extractor (yt-dlp carries thousands of lines for it). The popup says "Haul does not save video from YouTube." instead of listing pieces that would not play (2026-10-17).
 - [ ] Notifications when a download finishes.
-- [ ] Website pages in the `zewify` repo (`/haul/`), with screenshots from `scripts/window-shot.swift`.
-- [ ] The menu bar ring: check it against light and dark menu bars at 2560 wide.
+- [x] Website pages in the `zewify` repo (`/haul/`), with screenshots from `scripts/window-shot.swift`; the tested-sites list there and in the app's "?" popover change together.
+- [ ] The menu bar icon's progress bar: check it against light and dark menu bars at 2560 wide.

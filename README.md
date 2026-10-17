@@ -6,7 +6,8 @@ It takes the downloads your browser starts and fetches them over several connect
 - **Fast.** Each file is split into segments that download in parallel, and idle connections take over the tail of busy ones.
 - **Resumable.** Pause, lose the connection, or quit: Haul carries on from where it stopped.
 - **In your browser.** An extension for Chrome, Edge, Brave, Arc and Vivaldi, and one for Safari inside the app, hand downloads over as you click them, cookies included, so files behind a login just work.
-- **Video.** Streams a page plays show up in the extension's popup; separate video and audio tracks are joined into one file on your Mac, without re-encoding.
+- **Video.** The extension's popup lists what a page plays, the video you are watching first; HLS and DASH streams are saved whole, and separate video and audio tracks are joined into one file on your Mac, without re-encoding. The sites it was tested on are behind the ? in the app's toolbar.
+- **Speed limit.** One cap for every download together, from Settings or the menu bar.
 - **Private.** Haul talks to its extension on your own Mac only. Nothing is sent anywhere.
 
 ## Install
@@ -28,7 +29,8 @@ You need Xcode and XcodeGen (`brew install xcodegen`), and Node for the extensio
 
 Haul downloads what you ask it to and keeps its list on your Mac.
 The extension sends a download's address and that site's cookies to the app on your own Mac, so the download works as it would in the browser; neither goes anywhere else.
-The only other request is the installer's, and a future update check's, to GitHub.
+When the popup lists a page's videos, Haul reads the start of each (or its playlist) from the same site, to tell which one you are watching; it keeps nothing from those reads.
+The only other requests are a daily check for a newer release, which you can turn off in Settings, and the installer's, both to GitHub.
 
 ## Licence
 
