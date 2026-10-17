@@ -180,9 +180,41 @@ function installMediaSniffer() {
   }, { urls: ['<all_urls>'], types: ['xmlhttprequest', 'media', 'other', 'main_frame', 'sub_frame'] }, ['responseHeaders']);
 
   api.tabs.onRemoved.addListener((tabId) => mediaByTab.delete(tabId));
-  api.webNavigation && api.webNavigation.onCommitted && api.webNavigation.onCommitted.addListener((details) => {
-    if (details.frameId === 0) mediaByTab.delete(details.tabId);
+  // A page load starts the tab's list afresh. (This once listened to webNavigation, which the extension has no
+  // permission for, so lists piled up across loads.) A single-page app changing its URL is not a load, so a feed
+  // keeps what it fetched for the video now showing.
+  api.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status === 'loading') { mediaByTab.delete(tabId); showCount(tabId); }
   });
+}
+
+/// The videos playing in every frame of a tab, iframes included (Dailymotion's player lives in one), best first:
+/// real videos before looping clips, then by their own picture size, then by the space they fill. Run in each frame
+/// by the scripting API, so it must not reach for anything outside itself.
+function framePlaying() {
+  const all = [];
+  (function walk(root) {
+    for (const el of root.querySelectorAll('*')) {
+      if (el.tagName === 'VIDEO') all.push(el);
+      if (el.shadowRoot) walk(el.shadowRoot);
+    }
+  })(document);
+  return all.map((v) => ({ v, box: v.getBoundingClientRect() }))
+    .filter(({ v, box }) => box.width * box.height > 0 && box.bottom > 0 && box.top < innerHeight && box.right > 0 && box.left < innerWidth
+      && (!v.paused || v.currentTime > 0) && v.readyState > 0)
+    .map(({ v, box }) => ({ src: v.currentSrc || v.src || '', duration: Number.isFinite(v.duration) ? v.duration : 0,
+      width: v.videoWidth, height: v.videoHeight, loop: v.loop, area: box.width * box.height }));
+}
+
+async function playingInTab(tabId, fallback) {
+  try {
+    const results = await api.scripting.executeScript({ target: { tabId, allFrames: true }, func: framePlaying });
+    const all = results.flatMap((r) => r.result || []);
+    all.sort((a, b) => (a.loop - b.loop) || (b.width * b.height - a.width * a.height) || (b.area - a.area));
+    return all.length ? all : fallback;
+  } catch {
+    return fallback;   // a page the extension may not script
+  }
 }
 
 function showCount(tabId) {
@@ -289,23 +321,25 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         const s = await settings();
         const tabId = message.tabId;
-        let items = tabId != null ? KomizoMedia.tidyMedia(mediaByTab.get(tabId) || []) : [];
+        // Newest first: what the player fetched last is most likely what is on screen now.
+        let items = tabId != null ? KomizoMedia.tidyMedia(mediaByTab.get(tabId) || []).reverse() : [];
         let pageTitle = message.tabTitle;
         if (state.media && tabId != null) {
           const scanned = await pageItems(tabId, message.tabUrl);
+          scanned.playing = await playingInTab(tabId, scanned.playing || []);
           const fromPage = scanned.items.filter((i) => !KomizoMedia.isAdHost(i.url));
           const sniffedUrls = items.map((i) => i.url);
           const dash = KomizoMedia.labelDashItems(fromPage.filter((i) => i.kind === 'dash'), sniffedUrls, KomizoMedia.pageVideoId(message.tabUrl || ''));
           const reader = KomizoMedia.pageReaderItem(message.tabUrl || '');
           // Anything still unread is read now; the app answers within a few seconds with what it has.
           await inspectItems(items.concat(fromPage), message.tabUrl);
-          const known = withInspection(fromPage.filter((i) => i.kind !== 'dash').concat(items));
+          const known = KomizoMedia.dedupeStreams(withInspection(fromPage.filter((i) => i.kind !== 'dash').concat(items)));
           // Joined pairs first, then the item the visible video is playing, labelled so.
           const ordered = KomizoMedia.labelPlaying(KomizoMedia.markPlaying(KomizoMedia.pairTracks(known), scanned.playing));
           // Live streams, and items Komizo itself could not fetch (a one-time link the player already used), go last.
           const last = (i) => i.live || i.error;
           items = (reader ? [reader] : []).concat(dash).concat(ordered.filter((i) => !last(i))).concat(ordered.filter(last));
-          pageTitle = KomizoMedia.bestTitle(message.tabTitle, scanned.ogTitle);
+          pageTitle = KomizoMedia.bestTitle(message.tabTitle, scanned.ogTitle, scanned.heading);
         }
         const unsupported = KomizoMedia.unsupportedSite(message.tabUrl || '');
         if (unsupported) items = [];

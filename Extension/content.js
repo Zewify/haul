@@ -51,7 +51,8 @@
       found = media.findDashSets(html, media.pageVideoId(location.href)).concat(media.findInPage(html));
     }
     const og = document.querySelector('meta[property="og:title"]');
-    sendResponse({ items: found, playing: playingVideos(), ogTitle: og ? og.content : null });
+    const heading = [...document.querySelectorAll('h1, h2')].map((h) => h.textContent.trim()).find((t) => t && t.length <= 120);
+    sendResponse({ items: found, playing: playingVideos(), ogTitle: og ? og.content : null, heading: heading || null });
     return false;
   });
 

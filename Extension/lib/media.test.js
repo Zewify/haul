@@ -306,3 +306,35 @@ test('YouTube is named as unsupported, everything else is not', () => {
   assert.equal(unsupportedSite('https://vimeo.com/1'), null);
   assert.equal(unsupportedSite('not a url'), null);
 });
+
+const { dedupeStreams } = require('./media.js');
+
+test('a bare site title falls back to og:title, then to the page heading', () => {
+  // A signed-in Facebook reel: no og:title, the tab says only "Facebook", the first heading names the poster.
+  assert.equal(bestTitle('Facebook', null, 'Quiet Wolf'), 'Quiet Wolf - Facebook');
+  assert.equal(bestTitle('Facebook', 'A real caption here', 'Quiet Wolf'), 'A real caption here');
+  assert.equal(bestTitle('Natiming sa checkpoint | TikTok', null, 'Mel Palm'), 'Natiming sa checkpoint | TikTok', 'a real title is kept');
+  assert.equal(bestTitle('Facebook', null, 'Facebook'), 'Facebook', 'a heading that only repeats the site adds nothing');
+});
+
+test('one stream fetched twice under different tokens is listed once, the one Komizo can open', () => {
+  // Dailymotion, newest first: a fresh director link, an older one, and an ad schedule twice under one path.
+  const items = [
+    { kind: 'hls', url: 'https://cdndirector.dailymotion.com/cdn/manifest/video/x.m3u8?sec=new', duration: 72 },
+    { kind: 'hls', url: 'https://cdndirector.dailymotion.com/cdn/manifest/video/x.m3u8?sec=old', duration: 72 },
+    { kind: 'hls', url: 'https://dmxleo.dailymotion.com/cdn/manifest/video/x.m3u8?ps=1', error: 'Not an HLS playlist.' },
+    { kind: 'hls', url: 'https://dmxleo.dailymotion.com/cdn/manifest/video/x.m3u8?ps=2', error: 'Not an HLS playlist.' },
+    { kind: 'file', url: 'https://cdn.example/a.mp4' },
+  ];
+  assert.deepEqual(dedupeStreams(items).map((i) => i.url), [
+    'https://cdndirector.dailymotion.com/cdn/manifest/video/x.m3u8?sec=new',
+    'https://dmxleo.dailymotion.com/cdn/manifest/video/x.m3u8?ps=1',
+    'https://cdn.example/a.mp4',
+  ]);
+  // Two videos behind one address (a ?v= parameter) have different lengths and both stay.
+  const two = [{ kind: 'mpd', url: 'https://f.example/m.mpd?v=1', duration: 30 }, { kind: 'mpd', url: 'https://f.example/m.mpd?v=2', duration: 95 }];
+  assert.equal(dedupeStreams(two).length, 2);
+  // A twin that cannot be opened gives way to one that can.
+  const swap = [{ kind: 'hls', url: 'https://c.example/p.m3u8?t=1', error: 'The server answered 403' }, { kind: 'hls', url: 'https://c.example/p.m3u8?t=2', duration: 10 }];
+  assert.deepEqual(dedupeStreams(swap).map((i) => i.url), ['https://c.example/p.m3u8?t=2']);
+});

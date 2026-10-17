@@ -309,11 +309,31 @@
     return h ? `${h}:${String(m).padStart(2, '0')}:${r}` : `${m}:${r}`;
   }
 
-  // The tab's title, unless it is only the site's name ("X", "Instagram"): then the page's own og:title says more.
-  function bestTitle(tabTitle, ogTitle) {
-    const tab = (tabTitle || '').trim(), og = (ogTitle || '').trim();
+  // The tab's title, unless it is only the site's name ("X", "Instagram", "Facebook"): then the page's og:title, or
+  // failing that its first heading with the site's name after it (a signed-in Facebook reel offers only "Quiet Wolf").
+  function bestTitle(tabTitle, ogTitle, heading) {
+    const tab = (tabTitle || '').trim(), og = (ogTitle || '').trim(), head = (heading || '').trim();
     const bare = !/\s/.test(tab.replace(/\s*[-|·]\s*[^-|·]+$/, '').trim());
-    return bare && og.length > tab.length ? og : tab || og;
+    if (!bare) return tab || og;
+    if (og.length > tab.length) return og;
+    if (head && head.toLowerCase() !== tab.toLowerCase()) return tab ? `${head} - ${tab}` : head;
+    return tab || og;
+  }
+
+  // One stream fetched twice under different signed links (Dailymotion's tokens) is one item: the newest that Komizo
+  // could open. Streams at one address with different lengths are different videos and all stay.
+  function dedupeStreams(items) {
+    const key = (i) => { try { const u = new URL(i.url); return u.host + u.pathname; } catch { return i.url; } };
+    const kept = [];
+    for (const item of items) {
+      if (item.kind !== 'hls' && item.kind !== 'mpd') { kept.push(item); continue; }
+      const twin = kept.findIndex((k) => k.kind === item.kind && key(k) === key(item)
+        && (!k.duration || !item.duration || sameLength(k.duration, item.duration)));
+      if (twin < 0) { kept.push(item); continue; }
+      // Items arrive newest first; an earlier twin wins unless it is the one Komizo cannot open.
+      if (kept[twin].error && !item.error) kept[twin] = item;
+    }
+    return kept;
   }
 
   // Lengths agree when within a second, or 3% for long videos: players round, and trims differ slightly.
@@ -378,7 +398,7 @@
     return null;
   }
 
-  const api = { classifyResponse, describeMedia, rangeTotal, unsupportedSite, bestTitle, sameLength, markPlaying, pairTracks, labelPlaying, formatSize, normaliseMediaURL, findInPage, findDashSets, pageVideoId, parseMPD, labelDashItems, pageReaderItem,
+  const api = { classifyResponse, describeMedia, rangeTotal, unsupportedSite, bestTitle, dedupeStreams, sameLength, markPlaying, pairTracks, labelPlaying, formatSize, normaliseMediaURL, findInPage, findDashSets, pageVideoId, parseMPD, labelDashItems, pageReaderItem,
     hlsChildren, isAdHost, tidyMedia, recordMedia };
   root.KomizoMedia = api;
   if (typeof module !== 'undefined') module.exports = api;

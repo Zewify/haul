@@ -32,7 +32,8 @@ async function render() {
   if (state.media) {
     const items = state.items || [];
     const fromPage = items.filter((i) => i.label || i.kind === 'page');
-    const seen = items.filter((i) => !i.label).slice().reverse();
+    // In the background's order: newest first, links Komizo cannot open and live streams last.
+    const seen = items.filter((i) => !i.label);
     $('noMedia').hidden = items.length > 0;
     $('noMedia').textContent = state.unsupported || 'Nothing yet. Play a video and look again.';
     $('pageGroup').hidden = fromPage.length === 0;
