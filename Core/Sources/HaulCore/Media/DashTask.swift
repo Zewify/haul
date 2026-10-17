@@ -6,17 +6,19 @@ public actor DashTask {
     private var download: Download
     private let connections: Int
     private let session: URLSession
+    private let limiter: SpeedLimiter?
     private let retryDelays: [TimeInterval]
     private let onProgress: @Sendable (DownloadProgress) -> Void
     private var current: DownloadTask?
     private var paused = false
     private var cancelled = false
 
-    public init(download: Download, connections: Int, session: URLSession, retryDelays: [TimeInterval] = DownloadTask.defaultRetryDelays,
+    public init(download: Download, connections: Int, session: URLSession, limiter: SpeedLimiter? = nil, retryDelays: [TimeInterval] = DownloadTask.defaultRetryDelays,
                 onProgress: @escaping @Sendable (DownloadProgress) -> Void) {
         self.download = download
         self.connections = connections
         self.session = session
+        self.limiter = limiter
         self.retryDelays = retryDelays
         self.onProgress = onProgress
     }
@@ -41,7 +43,7 @@ public actor DashTask {
             if index == 1, let first = finishedParts.first?.finalPath, let info = await MediaInfo.inspect(URL(fileURLWithPath: first)), info.hasVideo, info.hasAudio {
                 return finish(with: first, discarding: finishedParts)
             }
-            let task = DownloadTask(download: piece, connections: connections, session: session, retryDelays: retryDelays) { [weak self] progress in
+            let task = DownloadTask(download: piece, connections: connections, session: session, limiter: limiter, retryDelays: retryDelays) { [weak self] progress in
                 Task { await self?.progressed(progress, part: index) }
             }
             current = task

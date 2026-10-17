@@ -48,6 +48,19 @@ struct LibraryTests {
         #expect(loaded.settings.connections == 4)
     }
 
+    @Test func theSpeedLimitIsOffUntilTurnedOnAndNeverBelowTheMinimum() throws {
+        let old = try JSONDecoder().decode(Settings.self, from: Data(#"{"connections": 8}"#.utf8))
+        #expect(old.limitSpeed == false)
+        #expect(old.speedLimit == 2_000_000)
+        #expect(old.effectiveSpeedLimit == nil)
+        var settings = old
+        settings.limitSpeed = true
+        settings.speedLimit = 5
+        #expect(settings.effectiveSpeedLimit == SpeedLimiter.minimum)
+        let back = try JSONDecoder().decode(Settings.self, from: JSONEncoder().encode(settings))
+        #expect(back.limitSpeed && back.speedLimit == 5)
+    }
+
     @Test func corruptFileGivesDefaultsWithoutCrashing() throws {
         let store = temporaryStore()
         try FileManager.default.createDirectory(at: store.url.deletingLastPathComponent(), withIntermediateDirectories: true)

@@ -14,10 +14,10 @@ public actor StreamTask {
     private var paused = false
     private var cancelled = false
 
-    public init(download: Download, session: URLSession, retryDelays: [TimeInterval] = DownloadTask.defaultRetryDelays,
+    public init(download: Download, session: URLSession, limiter: SpeedLimiter? = nil, retryDelays: [TimeInterval] = DownloadTask.defaultRetryDelays,
                 onProgress: @escaping @Sendable (DownloadProgress) -> Void) {
         self.download = download
-        self.fetcher = MediaFetcher(context: download.context, session: session, retryDelays: retryDelays)
+        self.fetcher = MediaFetcher(context: download.context, session: session, limiter: limiter, retryDelays: retryDelays)
         self.onProgress = onProgress
     }
 

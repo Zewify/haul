@@ -46,6 +46,7 @@ public actor DownloadTask {
     private var download: Download
     private let connections: Int
     private let session: URLSession
+    private let limiter: SpeedLimiter?
     private let retryDelays: [TimeInterval]
     private let onProgress: @Sendable (DownloadProgress) -> Void
     private let log = Logger(subsystem: "com.zewify.haul", category: "download")
@@ -65,12 +66,13 @@ public actor DownloadTask {
         case transient(String)
     }
 
-    public init(download: Download, connections: Int, session: URLSession,
+    public init(download: Download, connections: Int, session: URLSession, limiter: SpeedLimiter? = nil,
                 retryDelays: [TimeInterval] = DownloadTask.defaultRetryDelays,
                 onProgress: @escaping @Sendable (DownloadProgress) -> Void) {
         self.download = download
         self.connections = max(1, connections)
         self.session = session
+        self.limiter = limiter
         self.retryDelays = retryDelays
         self.onProgress = onProgress
     }
@@ -279,7 +281,8 @@ public actor DownloadTask {
                 case .response(let response):
                     sawResponse = true
                     try validate(response, for: index)
-                case .data(let data):
+                case .data(let data, let consumed):
+                    defer { consumed() }
                     if try await write(data, to: index, handle: handle) == .stop { return }
                 }
             }
@@ -340,8 +343,24 @@ public actor DownloadTask {
 
     private enum WriteOutcome { case `continue`, stop }
 
-    /// Writes a chunk at the segment's position, never past its end (which rebalancing may have pulled in).
+    /// Writes a chunk at the segment's position, never past its end (which rebalancing may have pulled in). Under a
+    /// speed limit it goes in slices, each paid for before it is written, so the file grows at the cap and no more.
     private func write(_ data: Data, to index: Int, handle: FileHandle) async throws -> WriteOutcome {
+        guard let limiter, limiter.bytesPerSecond != nil else { return try writeNow(data, to: index, handle: handle) }
+        var offset = data.startIndex
+        while offset < data.endIndex {
+            let room = download.segments[index].end - download.segments[index].position + 1
+            guard room > 0 else { return .stop }
+            let end = offset + Int(min(Int64(SpeedLimiter.slice), Int64(data.endIndex - offset), room))
+            await limiter.spend(end - offset)
+            try Task.checkCancellation()
+            if try writeNow(data[offset..<end], to: index, handle: handle) == .stop { return .stop }
+            offset = end
+        }
+        return .continue
+    }
+
+    private func writeNow(_ data: Data, to index: Int, handle: FileHandle) throws -> WriteOutcome {
         let segment = download.segments[index]
         let room = segment.end - segment.position + 1
         guard room > 0 else { return .stop }

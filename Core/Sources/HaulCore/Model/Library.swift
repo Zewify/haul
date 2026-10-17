@@ -28,6 +28,13 @@ public struct Settings: Codable, Hashable, Sendable {
     public var openAtLogin: Bool
     public var pairingToken: String
     public var pairedClients: [PairedClient]
+    /// Whether all downloads together are held to `speedLimit`; kept apart so the menu can toggle it without losing it.
+    public var limitSpeed: Bool
+    /// Bytes per second for everything at once, never below `SpeedLimiter.minimum`.
+    public var speedLimit: Int64
+
+    /// The cap the engine runs under: nil while the limit is off.
+    public var effectiveSpeedLimit: Int64? { limitSpeed ? max(speedLimit, SpeedLimiter.minimum) : nil }
 
     public init() {
         askBeforeStarting = true
@@ -37,6 +44,8 @@ public struct Settings: Codable, Hashable, Sendable {
         openAtLogin = false
         pairingToken = Settings.makeToken()
         pairedClients = []
+        limitSpeed = false
+        speedLimit = 2_000_000
     }
 
     /// 256 bits of randomness as base64url: the bearer token the extension sends with every download.
@@ -49,7 +58,7 @@ public struct Settings: Codable, Hashable, Sendable {
     // Every key but the token has a default, so a file from an older version still loads.
     private enum CodingKeys: String, CodingKey {
         case downloadFolderPath, downloadFolderBookmark, askBeforeStarting, connections, concurrent, port, openAtLogin,
-             pairingToken, pairedClients
+             pairingToken, pairedClients, limitSpeed, speedLimit
     }
 
     public init(from decoder: Decoder) throws {
@@ -64,6 +73,8 @@ public struct Settings: Codable, Hashable, Sendable {
         openAtLogin = try c.decodeIfPresent(Bool.self, forKey: .openAtLogin) ?? defaults.openAtLogin
         pairingToken = try c.decodeIfPresent(String.self, forKey: .pairingToken) ?? defaults.pairingToken
         pairedClients = try c.decodeIfPresent([PairedClient].self, forKey: .pairedClients) ?? []
+        limitSpeed = try c.decodeIfPresent(Bool.self, forKey: .limitSpeed) ?? defaults.limitSpeed
+        speedLimit = try c.decodeIfPresent(Int64.self, forKey: .speedLimit) ?? defaults.speedLimit
     }
 }
 

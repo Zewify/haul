@@ -50,6 +50,14 @@ public final class DownloadEngine {
     }
 
     public var effectiveConnections: Int { Limits.clampConnections(connections) }
+
+    /// Shared by every connection of every download; `speedLimit` changes it for running downloads too.
+    @ObservationIgnored public let limiter = SpeedLimiter()
+
+    /// Bytes per second for all downloads together, nil for none.
+    public var speedLimit: Int64? {
+        didSet { limiter.bytesPerSecond = speedLimit.map { max($0, SpeedLimiter.minimum) } }
+    }
     public var effectiveConcurrent: Int { Limits.clampConcurrent(concurrent) }
 
     public func download(_ id: UUID) -> Download? { downloads.first { $0.id == id } }
@@ -202,7 +210,7 @@ public final class DownloadEngine {
         }
         switch downloads[index].kind {
         case .file:
-            let task = DownloadTask(download: downloads[index], connections: effectiveConnections, session: session,
+            let task = DownloadTask(download: downloads[index], connections: effectiveConnections, session: session, limiter: limiter,
                                     retryDelays: retryDelays, onProgress: onProgress)
             tasks[id] = task
             runners[id] = Task { [weak self] in
@@ -210,14 +218,14 @@ public final class DownloadEngine {
                 self?.finished(id, with: result)
             }
         case .hls, .mpd:
-            let task = StreamTask(download: downloads[index], session: session, retryDelays: retryDelays, onProgress: onProgress)
+            let task = StreamTask(download: downloads[index], session: session, limiter: limiter, retryDelays: retryDelays, onProgress: onProgress)
             tasks[id] = task
             runners[id] = Task { [weak self] in
                 let result = await task.run()
                 self?.finished(id, with: result)
             }
         case .dash:
-            let task = DashTask(download: downloads[index], connections: effectiveConnections, session: session, retryDelays: retryDelays, onProgress: onProgress)
+            let task = DashTask(download: downloads[index], connections: effectiveConnections, session: session, limiter: limiter, retryDelays: retryDelays, onProgress: onProgress)
             tasks[id] = task
             runners[id] = Task { [weak self] in
                 let result = await task.run()

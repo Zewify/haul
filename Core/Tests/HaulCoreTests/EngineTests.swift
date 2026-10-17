@@ -17,6 +17,8 @@ struct EngineTests {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     }
 
+    /// Tests that need downloads still running set `speedLimit` to `SpeedLimiter.minimum`: a 2 MiB file takes twenty
+    /// seconds at it, however busy the machine is, where a slow server only hoped to; `nil` lets them all finish at once.
     func engine(concurrent: Int = 2) -> DownloadEngine {
         DownloadEngine(downloads: [], connections: 2, concurrent: concurrent, folder: folder, retryDelays: [0.05])
     }
@@ -35,14 +37,14 @@ struct EngineTests {
     }
 
     @Test func queueRunsTwoAtATimeAndStartsTheThirdWhenOneFinishes() async throws {
-        server.chunkDelayMs = 15
         let engine = engine(concurrent: 2)
+        engine.speedLimit = SpeedLimiter.minimum
         let a = engine.add(request("/a.bin"))
         let b = engine.add(request("/b.bin"))
         let c = engine.add(request("/c.bin"))
         #expect(await eventually { engine.download(a)?.state.isRunning == true && engine.download(b)?.state.isRunning == true })
         #expect(engine.download(c)?.state == .queued)
-        server.chunkDelayMs = 0
+        engine.speedLimit = nil
         #expect(await eventually { engine.download(a)?.state == .finished })
         #expect(await eventually { engine.download(c)?.state.isRunning == true || engine.download(c)?.state == .finished })
         #expect(await eventually { engine.downloads.allSatisfy { $0.state == .finished } })
@@ -50,8 +52,8 @@ struct EngineTests {
     }
 
     @Test func pauseAllAndResumeAll() async throws {
-        server.chunkDelayMs = 15
         let engine = engine(concurrent: 2)
+        engine.speedLimit = SpeedLimiter.minimum
         let a = engine.add(request("/a.bin"))
         let c = engine.add(request("/c.bin"))
         _ = engine.add(request("/b.bin"))
@@ -59,21 +61,21 @@ struct EngineTests {
         engine.pauseAll()
         #expect(await eventually { engine.downloads.allSatisfy { $0.state == .paused } })
         #expect(engine.downloads.allSatisfy { $0.state == .paused })
-        server.chunkDelayMs = 0
+        engine.speedLimit = nil
         engine.resumeAll()
         #expect(await eventually { engine.downloads.allSatisfy { $0.state == .finished } })
         _ = c
     }
 
     @Test func pausingAQueuedDownloadKeepsItOutOfTheQueue() async throws {
-        server.chunkDelayMs = 15
         let engine = engine(concurrent: 1)
+        engine.speedLimit = SpeedLimiter.minimum
         let a = engine.add(request("/a.bin"))
         let b = engine.add(request("/b.bin"))
         #expect(await eventually { engine.download(a)?.state.isRunning == true })
         engine.pause(b)
         #expect(engine.download(b)?.state == .paused)
-        server.chunkDelayMs = 0
+        engine.speedLimit = nil
         #expect(await eventually { engine.download(a)?.state == .finished })
         try? await Task.sleep(for: .milliseconds(100))
         #expect(engine.download(b)?.state == .paused)
@@ -93,25 +95,26 @@ struct EngineTests {
     }
 
     @Test func cancelWhileRunningRemovesThePart() async throws {
-        server.chunkDelayMs = 15
         let engine = engine()
+        engine.speedLimit = SpeedLimiter.minimum
         let a = engine.add(request("/a.bin"))
         #expect(await eventually { (engine.progress(for: a)?.bytes ?? 0) > 0 })
         engine.cancel(a)
         #expect(await eventually { engine.download(a)?.state == .cancelled })
         #expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("a.bin.haulpart").path))
+        engine.speedLimit = nil
         engine.retry(a)
         #expect(await eventually { engine.download(a)?.state == .finished })
     }
 
     @Test func concurrentSameNameGetsDistinctPartFiles() async throws {
-        server.chunkDelayMs = 15
         let engine = engine()
+        engine.speedLimit = SpeedLimiter.minimum
         let first = engine.add(request("/a.bin", name: "same.bin"))
         let second = engine.add(request("/b.bin", name: "same.bin"))
         #expect(engine.download(first)?.name == "same.bin")
         #expect(engine.download(second)?.name == "same 2.bin")
-        server.chunkDelayMs = 0
+        engine.speedLimit = nil
         #expect(await eventually { engine.downloads.allSatisfy { $0.state == .finished } })
         #expect(engine.download(first)?.finalPath?.hasSuffix("/same.bin") == true)
         #expect(engine.download(second)?.finalPath?.hasSuffix("/same 2.bin") == true)
@@ -175,13 +178,13 @@ struct EngineTests {
         let engine = engine()
         let failed = engine.add(request("/nope", name: "same.bin"))
         #expect(await eventually { if case .failed = engine.download(failed)?.state { true } else { false } })
-        server.chunkDelayMs = 15
+        engine.speedLimit = SpeedLimiter.minimum
         let working = engine.add(request("/a.bin", name: "same.bin"))
         #expect(engine.download(working)?.name == "same.bin")
         #expect(await eventually { (engine.progress(for: working)?.bytes ?? 0) > 0 })
         server["/nope"] = TestServer.Resource(data: blob)
         engine.retry(failed)
-        server.chunkDelayMs = 0
+        engine.speedLimit = nil
         #expect(await eventually { engine.downloads.allSatisfy { $0.state == .finished } })
         let w = try #require(engine.download(working))
         #expect(w.finalPath?.hasSuffix("/same.bin") == true)
@@ -203,8 +206,8 @@ struct EngineTests {
     }
 
     @Test func removeIfDoneLeavesActiveAndPausedDownloadsAlone() async throws {
-        server.chunkDelayMs = 15
         let engine = engine()
+        engine.speedLimit = SpeedLimiter.minimum
         let a = engine.add(request("/a.bin"))
         engine.removeIfDone(a)
         #expect(engine.download(a) != nil)
@@ -212,7 +215,7 @@ struct EngineTests {
         #expect(await eventually { engine.download(a)?.state == .paused })
         engine.removeIfDone(a)
         #expect(engine.download(a) != nil)
-        server.chunkDelayMs = 0
+        engine.speedLimit = nil
         engine.resume(a)
         #expect(await eventually { engine.download(a)?.state == .finished })
         engine.removeIfDone(a)
@@ -301,13 +304,13 @@ struct EngineTests {
     }
 
     @Test func combinedProgressSumsActiveDownloads() async throws {
-        server.chunkDelayMs = 15
         let engine = engine()
+        engine.speedLimit = SpeedLimiter.minimum
         _ = engine.add(request("/a.bin"))
         _ = engine.add(request("/b.bin"))
         #expect(await eventually { engine.combined.fraction ?? 0 > 0 })
         let combined = engine.combined
-        #expect(combined.fraction! < 1)
+        #expect(try #require(combined.fraction) < 1)
         #expect(combined.bytesPerSecond >= 0)
     }
 }

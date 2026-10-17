@@ -54,15 +54,18 @@ public struct StreamPlan: Hashable, Sendable {
     }
 }
 
-/// Fetches playlists, manifests, keys and segments with the browser's headers, retrying what a retry can fix.
+/// Fetches playlists, manifests, keys and segments with the browser's headers, retrying what a retry can fix,
+/// within the speed limit when there is one.
 public struct MediaFetcher: Sendable {
     public var context: RequestContext
     public var session: URLSession
+    public var limiter: SpeedLimiter?
     public var retryDelays: [TimeInterval]
 
-    public init(context: RequestContext, session: URLSession, retryDelays: [TimeInterval] = DownloadTask.defaultRetryDelays) {
+    public init(context: RequestContext, session: URLSession, limiter: SpeedLimiter? = nil, retryDelays: [TimeInterval] = DownloadTask.defaultRetryDelays) {
         self.context = context
         self.session = session
+        self.limiter = limiter
         self.retryDelays = retryDelays
     }
 
@@ -74,8 +77,29 @@ public struct MediaFetcher: Sendable {
             for (key, value) in context.allHeaders { request.setValue(value, forHTTPHeaderField: key) }
             if let range { request.setValue("bytes=\(range.lowerBound)-\(range.upperBound)", forHTTPHeaderField: "Range") }
             do {
-                let (data, response) = try await session.data(for: request)
-                guard let http = response as? HTTPURLResponse else { throw DownloadFailure("Not an HTTP response.") }
+                var response: HTTPURLResponse?
+                var data = Data()
+                for try await event in HTTPStream.open(request, session: session, original: url) {
+                    switch event {
+                    case .response(let http): response = http
+                    case .data(let chunk, let consumed):
+                        defer { consumed() }
+                        if let limiter, limiter.bytesPerSecond != nil {
+                            // Paid for a slice at a time, as a file download is, so a stream keeps to the cap too.
+                            var offset = chunk.startIndex
+                            while offset < chunk.endIndex {
+                                let end = min(offset + SpeedLimiter.slice, chunk.endIndex)
+                                await limiter.spend(end - offset)
+                                try Task.checkCancellation()
+                                data.append(chunk[offset..<end])
+                                offset = end
+                            }
+                        } else {
+                            data.append(chunk)
+                        }
+                    }
+                }
+                guard let http = response else { throw DownloadFailure("Not an HTTP response.") }
                 switch http.statusCode {
                 case 206: return data
                 case 200...299:
