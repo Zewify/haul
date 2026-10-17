@@ -20,7 +20,8 @@ What is left before Haul can ship. Tick items here rather than tracking them els
 
 ## Product
 
-- [ ] Speed limiter and scheduler (Pro, after 1.0).
+- [x] Speed limit (2026-10-17): one cap for all downloads together, in Settings → Connections and as a menu bar toggle. Measured on a 62 MB Archive.org file at 2 MB/s: 2.03 MB/s overall, no burst at the start.
+- [ ] Scheduler: start the queue at a set time, optionally sleep or quit when done.
 - [x] Grabber: DASH tracks are joined natively (AVFoundation passthrough); verified on a Facebook reel 2026-10-14. VP9-only videos cannot be joined and are not offered.
 - [x] Grabber: any site's HLS and DASH, not just Facebook (2026-10-17). HLS with separate audio is joined, any MPD is read, protected and live streams are refused in a sentence, the popup lists the stream instead of its pieces and ads. End-to-end round with `scripts/e2e-media.mjs`, each file opened with AVFoundation:
   - TED (HLS, audio apart): 19 min 640x480 H.264 + AAC; it was silent before.
