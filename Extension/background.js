@@ -305,7 +305,9 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
           items = (reader ? [reader] : []).concat(dash).concat(ordered.filter((i) => !last(i))).concat(ordered.filter(last));
           pageTitle = HaulMedia.bestTitle(message.tabTitle, scanned.ogTitle);
         }
-        return { ...state, capture: s.capture, port: s.port, media: state.media, items, pageTitle };
+        const unsupported = HaulMedia.unsupportedSite(message.tabUrl || '');
+        if (unsupported) items = [];
+        return { ...state, capture: s.capture, port: s.port, media: state.media, items, pageTitle, unsupported };
       }
       case 'pair': return pair();
       case 'download': return handOver(message.url, { referrer: message.referrer || (sender.tab && sender.tab.url), pageTitle: message.pageTitle || (sender.tab && sender.tab.title) });

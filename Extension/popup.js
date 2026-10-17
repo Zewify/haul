@@ -34,6 +34,7 @@ async function render() {
     const fromPage = items.filter((i) => i.label || i.kind === 'page');
     const seen = items.filter((i) => !i.label).slice().reverse();
     $('noMedia').hidden = items.length > 0;
+    $('noMedia').textContent = state.unsupported || 'Nothing yet. Play a video and look again.';
     $('pageGroup').hidden = fromPage.length === 0;
     $('seenGroup').hidden = seen.length === 0;
     fill($('pageMedia'), fromPage, tab, state.pageTitle);

@@ -295,3 +295,14 @@ test('what Haul learned shows in the list', () => {
   assert.equal(describeMedia({ kind: 'hls', url: 'https://c.com/live.m3u8', live: true }).title, 'Live stream · cannot be saved');
   assert.equal(describeMedia({ kind: 'hls', url: 'https://c.com/once.m3u8', error: 'The server answered 403' }).title, 'Stream · Haul cannot open this link');
 });
+
+const { unsupportedSite } = require('./media.js');
+
+test('YouTube is named as unsupported, everything else is not', () => {
+  for (const url of ['https://www.youtube.com/watch?v=abc', 'https://m.youtube.com/shorts/x', 'https://youtu.be/abc', 'https://music.youtube.com/watch?v=1']) {
+    assert.equal(unsupportedSite(url), 'Haul does not save video from YouTube.', url);
+  }
+  assert.equal(unsupportedSite('https://notyoutube.com/v'), null);
+  assert.equal(unsupportedSite('https://vimeo.com/1'), null);
+  assert.equal(unsupportedSite('not a url'), null);
+});

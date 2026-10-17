@@ -370,7 +370,15 @@
     });
   }
 
-  const api = { classifyResponse, describeMedia, rangeTotal, bestTitle, sameLength, markPlaying, pairTracks, labelPlaying, formatSize, normaliseMediaURL, findInPage, findDashSets, pageVideoId, parseMPD, labelDashItems, pageReaderItem,
+  // A site Haul does not save video from, so the popup says so instead of listing pieces that would not play.
+  function unsupportedSite(tabUrl) {
+    let host;
+    try { host = new URL(tabUrl).host.toLowerCase(); } catch { return null; }
+    if (['youtube.com', 'youtu.be', 'youtube-nocookie.com'].some((h) => host === h || host.endsWith('.' + h))) return 'Haul does not save video from YouTube.';
+    return null;
+  }
+
+  const api = { classifyResponse, describeMedia, rangeTotal, unsupportedSite, bestTitle, sameLength, markPlaying, pairTracks, labelPlaying, formatSize, normaliseMediaURL, findInPage, findDashSets, pageVideoId, parseMPD, labelDashItems, pageReaderItem,
     hlsChildren, isAdHost, tidyMedia, recordMedia };
   root.HaulMedia = api;
   if (typeof module !== 'undefined') module.exports = api;
