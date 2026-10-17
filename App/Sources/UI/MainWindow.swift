@@ -7,6 +7,7 @@ struct MainWindow: View {
     @Environment(WindowManager.self) private var windows
     @State private var filter: Filter = .all
     @State private var showingAdd = false
+    @State private var showingSites = false
     @State private var selection: UUID?
 
     enum Filter: String, CaseIterable, Identifiable {
@@ -58,6 +59,9 @@ struct MainWindow: View {
                 Button { showingAdd = true } label: { Label("Add URL", systemImage: "plus") }
                     .help("Download a link")
                     .keyboardShortcut("n", modifiers: .command)
+                Button { showingSites.toggle() } label: { Label("Sites Haul Works With", systemImage: "questionmark.circle") }
+                    .help("Which websites Haul can save video from")
+                    .popover(isPresented: $showingSites, arrowEdge: .bottom) { TestedSitesView() }
             }
         }
         .sheet(isPresented: $showingAdd) { AddURLSheet().environment(model) }
