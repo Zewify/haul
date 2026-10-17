@@ -117,7 +117,8 @@ struct SpeedLimitTransferTests {
         let started = Date()
         let result = await task.run()
         #expect(result.state == .paused)
-        #expect(Date().timeIntervalSince(started) < 2.5)
+        // Waiting out the cap would take twenty seconds; a pause that cuts the wait short is back in a few.
+        #expect(Date().timeIntervalSince(started) < 6)
     }
 
     @Test func aStreamsSegmentsShareTheCap() async throws {

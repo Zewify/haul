@@ -5,9 +5,17 @@ import SwiftUI
 struct MenuContent: View {
     @Environment(AppModel.self) private var model
     @Environment(WindowManager.self) private var windows
+    @Environment(UpdateChecker.self) private var updates
 
     var body: some View {
         let engine = model.engine
+        if let version = updates.available {
+            // Haul is installed by its curl command, so updating is running it again.
+            Text("Haul \(version.description) is available")
+            Button("Copy Install Command") { updates.copyInstallCommand() }
+            Text("Then paste it into Terminal")
+            Divider()
+        }
         let active = engine.downloads.filter { $0.state.isActive }
         let combined = engine.combined
         if active.isEmpty {

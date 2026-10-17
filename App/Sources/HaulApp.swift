@@ -10,6 +10,7 @@ struct HaulApp: App {
             MenuContent()
                 .environment(delegate.model)
                 .environment(delegate.windows)
+                .environment(delegate.updates)
         } label: {
             MenuBarIcon(engine: delegate.model.engine, windows: delegate.windows)
         }
@@ -17,6 +18,7 @@ struct HaulApp: App {
             SettingsView()
                 .environment(delegate.model)
                 .environment(delegate.windows)
+                .environment(delegate.updates)
         }
     }
 }
@@ -25,12 +27,14 @@ struct HaulApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     lazy var windows = WindowManager(model: model)
+    let updates = UpdateChecker()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hosted unit tests run inside the app; they build what they need themselves.
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
         model.onPending = { [weak self] in self?.windows.showCatchPanel() }
         model.start()
+        updates.start()
         #if DEBUG
         if let target = UserDefaults.standard.string(forKey: "HaulShow") {
             windows.showForDebugging(target)

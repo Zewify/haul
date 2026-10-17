@@ -61,7 +61,7 @@ enum Fixtures {
             let data = samples.withUnsafeBytes { Data($0) }
             var block: CMBlockBuffer?
             CMBlockBufferCreateWithMemoryBlock(allocator: nil, memoryBlock: nil, blockLength: data.count, blockAllocator: nil, customBlockSource: nil, offsetToData: 0, dataLength: data.count, flags: 0, blockBufferOut: &block)
-            data.withUnsafeBytes { CMBlockBufferReplaceDataBytes(with: $0.baseAddress!, blockBuffer: block!, offsetIntoDestination: 0, dataLength: data.count) }
+            _ = data.withUnsafeBytes { CMBlockBufferReplaceDataBytes(with: $0.baseAddress!, blockBuffer: block!, offsetIntoDestination: 0, dataLength: data.count) }
             var sample: CMSampleBuffer?
             CMAudioSampleBufferCreateReadyWithPacketDescriptions(allocator: nil, dataBuffer: block!, formatDescription: format!, sampleCount: framesPerChunk,
                                                                  presentationTimeStamp: CMTime(value: CMTimeValue(chunk * framesPerChunk), timescale: 44100), packetDescriptions: nil, sampleBufferOut: &sample)

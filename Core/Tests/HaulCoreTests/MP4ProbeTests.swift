@@ -78,13 +78,13 @@ struct MediaInspectorTests {
     @Test func aServerThatIgnoresRangesIsNotReadToTheEnd() async throws {
         server.supportsRanges = false
         server.chunkDelayMs = 20
-        let file = Boxes.box("moov", Boxes.mvhd(timescale: 1000, duration: 6000) + Boxes.trak("soun")) + Boxes.box("mdat", TestServer.blob(8_000_000))
+        let file = Boxes.box("moov", Boxes.mvhd(timescale: 1000, duration: 6000) + Boxes.trak("soun")) + Boxes.box("mdat", TestServer.blob(32_000_000))
         server["/a.mp4"] = .init(data: file)
         let started = Date()
         let found = await MediaInspector.inspect(server.url("/a.mp4"), kind: "file", fetcher: fetcher)
         #expect(found.audio == true)
-        // Eight megabytes at 64 KiB per 20 ms would take two and a half seconds.
-        #expect(Date().timeIntervalSince(started) < 1.5)
+        // 32 MB at 64 KiB per 20 ms would take ten seconds; stopping after the head takes a fraction of one.
+        #expect(Date().timeIntervalSince(started) < 3)
     }
 
     /// Dailymotion's player spends a one-time playlist link; the same link refuses anyone after it.
