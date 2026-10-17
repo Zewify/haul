@@ -201,6 +201,8 @@ else
 fi
 release 3.0.1 "" "" with-extension
 if run_install && ! grep -q "Haul" "$work/out.txt"; then pass "with no Haul left, nothing is said about it"; else fail "no Haul: $(cat "$work/out.txt")"; fi
+mkdir -p "$work/OldApps/Haul.app/Contents"
+if run_install && [ ! -e "$work/OldApps/Haul.app" ] && grep -q "already installed" "$work/out.txt"; then pass "an old Haul is retired even when Downhaul is up to date"; else fail "retire when current: $(cat "$work/out.txt")"; fi
 
 [ "$failures" -eq 0 ] || { echo "$failures installer test(s) failed"; exit 1; }
 echo "installer: all tests passed"
