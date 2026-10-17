@@ -71,11 +71,43 @@ public enum ServerError: Error {
     case listenFailed(String)
 }
 
+/// The extension asks what a page's media items are (length, tracks) so it can tell which is the video being watched.
+public struct InspectRequest: Codable, Sendable, Hashable {
+    public struct Item: Codable, Sendable, Hashable {
+        public var url: String
+        /// `file`, `hls` or `mpd`.
+        public var kind: String
+        public var cookies: String?
+
+        public init(url: String, kind: String, cookies: String? = nil) {
+            self.url = url
+            self.kind = kind
+            self.cookies = cookies
+        }
+    }
+
+    public var items: [Item]
+    public var referrer: String?
+    public var userAgent: String?
+
+    public init(items: [Item], referrer: String? = nil, userAgent: String? = nil) {
+        self.items = items
+        self.referrer = referrer
+        self.userAgent = userAgent
+    }
+}
+
 public protocol ExtensionServerDelegate: AnyObject, Sendable {
     /// Ask the user whether this browser may send downloads. Waits for the answer.
     func server(_ server: ExtensionServer, approvePairing request: PairRequest) async -> Bool
     /// A download (or, with `media`, a media item) to add; returns its id.
     func server(_ server: ExtensionServer, receive download: IncomingDownload, media: Bool) async throws -> UUID
+    /// What each item is, as far as its first bytes or its playlist tell.
+    func server(_ server: ExtensionServer, inspect request: InspectRequest) async -> [InspectedMedia]
+}
+
+public extension ExtensionServerDelegate {
+    func server(_ server: ExtensionServer, inspect request: InspectRequest) async -> [InspectedMedia] { [] }
 }
 
 /// The local HTTP server the browser extensions talk to, on the loopback interface only.
@@ -100,6 +132,9 @@ public final class ExtensionServer: @unchecked Sendable {
     static let extensionSchemes = ["chrome-extension://", "safari-web-extension://", "moz-extension://"]
     /// How long `/pair` waits for the user.
     public static let pairingTimeout: Duration = .seconds(60)
+    /// An inspection answers within this, with what it has; the popup is waiting on it.
+    public static let inspectTimeout: Duration = .seconds(6)
+    public static let inspectLimit = 16
 
     public init(port: UInt16, token: String, status: ServerStatus, delegate: ExtensionServerDelegate) {
         requestedPort = port
@@ -242,6 +277,22 @@ public final class ExtensionServer: @unchecked Sendable {
             } catch {
                 return .error(500, error.localizedDescription, origin: allowOrigin)
             }
+
+        case ("POST", "/inspect"):
+            if !lock.withLock({ _status.features.media }) { return .error(404, "Not available in this edition", origin: allowOrigin) }
+            guard fromExtension else { return .error(403, "Only a browser extension may ask", origin: allowOrigin) }
+            guard request.headers["authorization"] == "Bearer \(token)" else { return .error(401, "Not paired", origin: allowOrigin) }
+            guard var inspect = try? JSONDecoder().decode(InspectRequest.self, from: request.body) else {
+                return .error(400, "Bad inspect request", origin: allowOrigin)
+            }
+            // Only web addresses, and few enough that the popup never waits long.
+            inspect.items = Array(inspect.items.filter { item in
+                URL(string: item.url).map { ["http", "https"].contains($0.scheme?.lowercased() ?? "") && $0.host != nil } ?? false
+            }.prefix(Self.inspectLimit))
+            guard let delegate else { return .error(500, "No delegate", origin: allowOrigin) }
+            let asked = inspect
+            let found = await withTimeout(Self.inspectTimeout) { await delegate.server(self, inspect: asked) } ?? []
+            return HTTPResponse(status: 200, json: found, origin: allowOrigin)
 
         default:
             return .error(404, "No such route", origin: allowOrigin)

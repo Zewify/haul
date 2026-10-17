@@ -18,6 +18,12 @@ final class RecordingDelegate: ExtensionServerDelegate, @unchecked Sendable {
         lock.withLock { received.append((download, media)) }
         return id
     }
+
+    var inspected: [InspectRequest] = []
+    func server(_ server: ExtensionServer, inspect request: InspectRequest) async -> [InspectedMedia] {
+        lock.withLock { inspected.append(request) }
+        return request.items.map { InspectedMedia(url: $0.url, duration: 6, video: true, audio: false, width: 720, height: 1280) }
+    }
 }
 
 struct ExtensionServerTests {
@@ -150,6 +156,25 @@ struct ExtensionServerTests {
         let http = response as! HTTPURLResponse
         #expect(http.statusCode == 204)
         #expect(http.value(forHTTPHeaderField: "Access-Control-Allow-Headers")?.contains("Authorization") == true)
+    }
+
+    @Test func inspectNeedsTheTokenAndKeepsToWebAddresses() async throws {
+        let server = try makeServer(media: true)
+        defer { server.stop() }
+        let body = #"{"items":[{"url":"https://v.example/a.mp4","kind":"file","cookies":"s=1"},{"url":"file:///etc/passwd","kind":"file"}],"referrer":"https://page.example/"}"#
+        let (refused, _) = try await send(server, "POST", "/inspect", body: body)
+        #expect(refused == 401)
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(server.port)/inspect")!)
+        request.httpMethod = "POST"
+        request.httpBody = Data(body.utf8)
+        request.setValue("chrome-extension://abcdefgh", forHTTPHeaderField: "Origin")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        #expect((response as! HTTPURLResponse).statusCode == 200)
+        let found = try JSONDecoder().decode([InspectedMedia].self, from: data)
+        #expect(found.map(\.url) == ["https://v.example/a.mp4"], "the file URL never reaches the delegate")
+        #expect(found.first?.duration == 6)
+        #expect(delegate.lock.withLock { delegate.inspected.first?.items.first?.cookies } == "s=1")
     }
 
     @Test func tokenCanBeRotated() async throws {

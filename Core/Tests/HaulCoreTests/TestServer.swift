@@ -133,7 +133,8 @@ final class TestServer: @unchecked Sendable {
         if supportsRanges { headers["Accept-Ranges"] = "bytes" }
         var body = resource.data
         var status = resource.status
-        if supportsRanges, let range = request.headers["range"], range.hasPrefix("bytes=") {
+        // An error is an error whatever was asked for; only a good resource is served in ranges.
+        if supportsRanges, resource.status == 200, let range = request.headers["range"], range.hasPrefix("bytes=") {
             let spec = range.dropFirst("bytes=".count).split(separator: "-", omittingEmptySubsequences: false)
             let total = resource.data.count
             let start = Int(spec[0]) ?? 0

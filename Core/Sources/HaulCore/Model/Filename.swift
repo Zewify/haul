@@ -82,10 +82,29 @@ public enum Filename {
 
     /// A name for a video grabbed from a page: the page's title (minus a " | Site" suffix) with the file's extension,
     /// because CDN names are hashes; the URL's own name when there is no title.
+    /// The longest a name taken from a page title may be, in bytes: a filesystem allows 255, and a joined download's
+    /// parts add " (video).mp4.haulpart" to it. A caption used as a title is far longer than any name should be.
+    static let titleBytes = 150
+
+    /// A page title as a filename's stem: its first line, a slash no longer a folder ("… : r/videos" kept whole), and
+    /// cut at a word to `titleBytes`.
+    static func displayTitle(_ raw: String) -> String {
+        var title = raw.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? ""
+        title = title.replacingOccurrences(of: " : ", with: " - ").replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: "\\", with: "-")
+        guard title.utf8.count > titleBytes else { return title }
+        var cut = ""
+        for character in title {
+            if (cut + String(character)).utf8.count > titleBytes - 3 { break }
+            cut.append(character)
+        }
+        if let space = cut.lastIndex(of: " "), cut.distance(from: cut.startIndex, to: space) > cut.count / 2 { cut = String(cut[..<space]) }
+        return cut.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters)) + "…"
+    }
+
     public static func mediaName(pageTitle: String?, url: URL, contentType: String?, videoId: String? = nil) -> String {
         let urlName = sanitised(fromURL(url))
         let ext = fileExtension(for: contentType) ?? (url.pathExtension.isEmpty ? nil : url.pathExtension.lowercased())
-        var title = (pageTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        var title = displayTitle(pageTitle ?? "")
         // A bare site name ("Facebook") names nothing; the video's id at least tells two grabs apart.
         if let videoId, !title.isEmpty, !title.contains(" "), !title.contains("|"), !title.contains("-") { title += " " + videoId }
         guard !title.isEmpty else {

@@ -79,11 +79,13 @@ public struct MediaFetcher: Sendable {
             do {
                 var response: HTTPURLResponse?
                 var data = Data()
-                for try await event in HTTPStream.open(request, session: session, original: url) {
+                reading: for try await event in HTTPStream.open(request, session: session, original: url) {
                     switch event {
                     case .response(let http): response = http
                     case .data(let chunk, let consumed):
                         defer { consumed() }
+                        // A server that ignores Range would send the whole file; stop once the range is in hand.
+                        if let range, response?.statusCode == 200, Int64(data.count) > range.upperBound { break reading }
                         if let limiter, limiter.bytesPerSecond != nil {
                             // Paid for a slice at a time, as a file download is, so a stream keeps to the cap too.
                             var offset = chunk.startIndex
@@ -131,6 +133,9 @@ public struct MediaFetcher: Sendable {
 
 /// Reads an HLS playlist or a DASH manifest and says what to download.
 public enum StreamSource {
+    /// A playlist that is still being written: there is no end to download to.
+    public static let liveStream = DownloadFailure("This is a live stream; Haul saves finished videos.")
+
     public static func plan(_ kind: DownloadKind, url: URL, fetcher: MediaFetcher) async throws -> StreamPlan {
         switch kind {
         case .mpd: try await dashPlan(url, fetcher: fetcher)
@@ -140,13 +145,15 @@ public enum StreamSource {
 
     static func hlsPlan(_ url: URL, fetcher: MediaFetcher) async throws -> StreamPlan {
         switch try await playlist(url, fetcher: fetcher) {
-        case .media(let segments, let map, _):
+        case .media(let segments, let map, let endList):
+            guard endList else { throw liveStream }
             return StreamPlan(video: StreamTrack(segments: segments, map: map))
         case .master(let variants, let renditions):
             guard let best = HLS.best(of: variants) else { throw DownloadFailure("The playlist lists no streams.") }
-            guard case .media(let segments, let map, _) = try await playlist(best.uri, fetcher: fetcher) else {
+            guard case .media(let segments, let map, let endList) = try await playlist(best.uri, fetcher: fetcher) else {
                 throw DownloadFailure("The playlist only points at other playlists.")
             }
+            guard endList else { throw liveStream }
             var plan = StreamPlan(video: StreamTrack(segments: segments, map: map))
             if let rendition = HLS.audio(for: best, in: renditions), let audioURL = rendition.uri {
                 guard case .media(let audioSegments, let audioMap, _) = try await playlist(audioURL, fetcher: fetcher) else {

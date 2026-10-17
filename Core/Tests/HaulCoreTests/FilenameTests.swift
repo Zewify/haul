@@ -67,3 +67,26 @@ struct MediaNameTests {
         #expect(Filename.mediaName(pageTitle: nil, url: hash, contentType: "video/mp4", videoId: "99") == "AQNwtkB9F6JmSviz4edJ.mp4")
     }
 }
+
+struct MediaTitleTests {
+    let url = URL(string: "https://cdn.example/v/abc.mp4")!
+
+    @Test func aSlashInATitleIsNotAFolder() {
+        // Reddit titles end " : r/subreddit"; the slash once cut everything before it, leaving "CompetitivePUBG.mp4".
+        #expect(Filename.mediaName(pageTitle: "Best apology in sports history : r/nextfuckinglevel", url: url, contentType: "video/mp4")
+                == "Best apology in sports history - r-nextfuckinglevel.mp4")
+    }
+
+    @Test func aCaptionAsTitleKeepsItsFirstLineAndAReasonableLength() {
+        // Instagram's og:title is the whole caption; it once ran a joined download's part name past 255 bytes.
+        let caption = "NASA on Instagram: \"POV: you're watching the Earth set\nWe just released new footage from the far side of the Moon, captured by the crew on the way home, and it is \(String(repeating: "stunning ", count: 30))\""
+        let name = Filename.mediaName(pageTitle: caption, url: url, contentType: "video/mp4")
+        #expect(name.hasPrefix("NASA on Instagram_ \"POV_ you're watching the Earth set"))
+        #expect(!name.contains("We just"))
+        let long = Filename.mediaName(pageTitle: String(repeating: "朱棣我的侄子走丢了有好心人能帮帮我吗", count: 12), url: url, contentType: "video/mp4")
+        #expect(long.utf8.count <= Filename.titleBytes + 4)
+        #expect(long.hasSuffix("….mp4"))
+        // What a two-track download writes next to it must still be a legal name.
+        #expect((long + " (video).mp4.haulpart").utf8.count < 255)
+    }
+}

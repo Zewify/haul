@@ -410,4 +410,19 @@ extension AppModel: ExtensionServerDelegate {
         startCatch(pending)
         return engine.downloads.last?.id ?? pending.id
     }
+
+    /// Reads each item's head or playlist, all at once and without retries: the popup is waiting on the answer.
+    func server(_ server: ExtensionServer, inspect request: InspectRequest) async -> [InspectedMedia] {
+        let session = self.session
+        return await withTaskGroup(of: InspectedMedia?.self) { group in
+            for item in request.items {
+                guard let url = URL(string: item.url) else { continue }
+                let context = RequestContext(referrer: request.referrer, cookies: item.cookies, userAgent: request.userAgent)
+                group.addTask { await MediaInspector.inspect(url, kind: item.kind, fetcher: MediaFetcher(context: context, session: session, retryDelays: [])) }
+            }
+            var found: [InspectedMedia] = []
+            for await result in group { if let result { found.append(result) } }
+            return found
+        }
+    }
 }

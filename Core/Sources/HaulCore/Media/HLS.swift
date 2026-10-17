@@ -86,7 +86,8 @@ public enum HLS {
                 }
             } else if line.hasPrefix("#EXT-X-MEDIA-SEQUENCE:") {
                 sequence = Int(line.dropFirst("#EXT-X-MEDIA-SEQUENCE:".count)) ?? 0
-            } else if line.hasPrefix("#EXT-X-ENDLIST") {
+            } else if line.hasPrefix("#EXT-X-ENDLIST") || line == "#EXT-X-PLAYLIST-TYPE:VOD" {
+                // A VOD playlist never changes, so it is finished even before its ENDLIST.
                 endList = true
             } else if line.hasPrefix("#EXT-X-SESSION-KEY:") {
                 if attributes(String(line.dropFirst("#EXT-X-SESSION-KEY:".count)))["METHOD"] == "SAMPLE-AES" { throw ParseError.drm }
