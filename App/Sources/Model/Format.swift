@@ -29,4 +29,14 @@ enum Format {
         guard let fraction else { return "" }
         return "\(Int((fraction * 100).rounded(.down)))%"
     }
+
+    /// A folder as a person would say it: "~/Downloads". Inside the sandbox HOME is the app's container, whose
+    /// Downloads is a link to the real one, so the link is resolved and the real home comes from the passwd entry.
+    static func folder(_ path: String) -> String {
+        let resolved = (path as NSString).resolvingSymlinksInPath
+        if let home = getpwuid(getuid()).flatMap({ String(validatingCString: $0.pointee.pw_dir) }), resolved == home || resolved.hasPrefix(home + "/") {
+            return "~" + resolved.dropFirst(home.count)
+        }
+        return (resolved as NSString).abbreviatingWithTildeInPath
+    }
 }

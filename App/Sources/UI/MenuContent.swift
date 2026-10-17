@@ -25,6 +25,7 @@ struct MenuContent: View {
         Divider()
         Button("Pause All") { engine.pauseAll() }.disabled(active.isEmpty)
         Button("Resume All") { engine.resumeAll() }.disabled(!engine.downloads.contains { $0.state == .paused })
+        Toggle("Limit Speed to \(Format.speed(Double(model.settings.speedLimit)))", isOn: Binding(get: { model.settings.limitSpeed }, set: { model.setLimitSpeed($0) }))
         Divider()
         Button("Open Haul") { windows.showMain() }.keyboardShortcut("o")
         Button("Settings…") { windows.showSettings() }.keyboardShortcut(",")

@@ -20,7 +20,7 @@ struct GeneralSettings: View {
         Form {
             LabeledContent("Download folder") {
                 HStack {
-                    Text(model.folder.path(percentEncoded: false)).lineLimit(1).truncationMode(.middle)
+                    Text(Format.folder(model.folder.path(percentEncoded: false))).lineLimit(1).truncationMode(.middle)
                     Spacer()
                     Button("Choose…") { choose() }
                     if model.settings.downloadFolderPath != nil {
@@ -34,6 +34,8 @@ struct GeneralSettings: View {
                 .font(.callout).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
+        .scrollDisabled(true)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func choose() {
@@ -63,10 +65,24 @@ struct ConnectionSettings: View {
                 Text("More connections help on fast servers; too many on a slow one only shares the same pipe thinner.")
                     .font(.callout).foregroundStyle(.secondary)
             }
+            Section("Speed") {
+                Toggle("Limit download speed", isOn: Binding(get: { model.settings.limitSpeed }, set: { model.setLimitSpeed($0) }))
+                LabeledContent("All downloads together") {
+                    HStack(spacing: 6) {
+                        TextField("Limit", value: Binding(get: { Double(model.settings.speedLimit) / 1_000_000 }, set: { model.setSpeedLimit(Int64(($0 * 1_000_000).rounded())) }),
+                                  format: .number.precision(.fractionLength(0...1)))
+                            .labelsHidden().frame(width: 64).multilineTextAlignment(.trailing)
+                        Text("MB/s").foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(!model.settings.limitSpeed)
+                Text("Keeps room for calls and streaming while Haul works. The menu bar menu turns it on and off.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
             Section("Browser extension server") {
                 LabeledContent("Port") {
                     HStack {
-                        TextField("Port", text: $portText).frame(width: 80).multilineTextAlignment(.trailing)
+                        TextField("Port", text: $portText).labelsHidden().frame(width: 80).multilineTextAlignment(.trailing)
                             .onSubmit { apply() }
                         Button("Apply") { apply() }.disabled(UInt16(portText) == nil || UInt16(portText) == model.settings.port)
                     }
@@ -81,6 +97,8 @@ struct ConnectionSettings: View {
             }
         }
         .formStyle(.grouped)
+        .scrollDisabled(true)
+        .fixedSize(horizontal: false, vertical: true)
         .onAppear { portText = String(model.settings.port) }
     }
 
@@ -106,13 +124,17 @@ struct BrowserSettings: View {
                 }
             }
             Section("Install the extension") {
-                Text("Safari: the Haul extension comes with this app. Turn it on in Safari → Settings → Extensions.")
-                Text("Chrome, Edge, Brave, Arc, Vivaldi: install Haul from the Chrome Web Store, or load the Extension folder unpacked from chrome://extensions with Developer mode on.")
-                Text("Then open the extension's popup and press Connect to Haul. Downloads the browser starts are handed to Haul; links to files are caught as you click them.")
-                    .foregroundStyle(.secondary)
+                Group {
+                    Text("Safari: the Haul extension comes with this app. Turn it on in Safari → Settings → Extensions.")
+                    Text("Chrome, Edge, Brave, Arc, Vivaldi: load the Extension folder unpacked from chrome://extensions with Developer mode on.")
+                    Text("Then open the extension's popup and press Connect to Haul. Downloads the browser starts are handed to Haul; links to files are caught as you click them.")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.callout)
             }
-            .font(.callout)
         }
         .formStyle(.grouped)
+        .scrollDisabled(true)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }

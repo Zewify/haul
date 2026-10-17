@@ -11,7 +11,7 @@ struct HaulApp: App {
                 .environment(delegate.model)
                 .environment(delegate.windows)
         } label: {
-            MenuBarIcon(engine: delegate.model.engine)
+            MenuBarIcon(engine: delegate.model.engine, windows: delegate.windows)
         }
         Settings {
             SettingsView()
@@ -57,11 +57,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 /// segmented arrow. While anything downloads, the shaft's four segments fill from the top with the combined progress.
 struct MenuBarIcon: View {
     let engine: DownloadEngine
+    let windows: WindowManager
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         let combined = engine.combined
         Image(nsImage: MenuBarGlyph.make(fraction: combined.fraction))
             .accessibilityLabel(combined.fraction.map { "Haul, \(Format.percent($0)) downloaded" } ?? "Haul")
+            // The icon lives as long as the app, so it lends the window manager SwiftUI's way to open Settings.
+            .onAppear { windows.openSettings = openSettings }
     }
 }
 

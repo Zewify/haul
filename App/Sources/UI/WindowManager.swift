@@ -9,6 +9,9 @@ final class WindowManager {
     @ObservationIgnored private let model: AppModel
     @ObservationIgnored private var main: NSWindow?
     @ObservationIgnored private var catchPanel: NSPanel?
+    /// SwiftUI's Settings opener, lent by the menu bar icon. The old `showSettingsWindow:` action does nothing for a
+    /// SwiftUI Settings scene on current macOS, which left the menu's Settings… item dead.
+    @ObservationIgnored var openSettings: OpenSettingsAction?
 
     static let mainFrame = "HaulMain"
 
@@ -72,7 +75,7 @@ final class WindowManager {
 
     func showSettings() {
         NSApp.activate()
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        openSettings?()
     }
 
     #if DEBUG

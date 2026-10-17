@@ -62,6 +62,7 @@ final class AppModel {
         scopedFolder = folder.scoped
         engine = DownloadEngine(downloads: library.downloads, connections: library.settings.connections,
                                 concurrent: library.settings.concurrent, folder: folder.url)
+        engine.speedLimit = library.settings.effectiveSpeedLimit
         pairingApprover = { request in
             await AppModel.askToPair(request)
         }
@@ -105,6 +106,19 @@ final class AppModel {
     func setConnections(_ value: Int) {
         library.settings.connections = Limits.clampConnections(value)
         engine.connections = library.settings.connections
+        markDirty()
+    }
+
+    /// Turns the cap on or off; running downloads follow at once.
+    func setLimitSpeed(_ value: Bool) {
+        library.settings.limitSpeed = value
+        engine.speedLimit = library.settings.effectiveSpeedLimit
+        markDirty()
+    }
+
+    func setSpeedLimit(_ bytesPerSecond: Int64) {
+        library.settings.speedLimit = max(bytesPerSecond, SpeedLimiter.minimum)
+        engine.speedLimit = library.settings.effectiveSpeedLimit
         markDirty()
     }
 

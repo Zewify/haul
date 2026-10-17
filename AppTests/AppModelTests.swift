@@ -85,6 +85,21 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.pending.isEmpty)
     }
 
+    func testTheSpeedLimitReachesTheEngineAndSurvivesARelaunch() throws {
+        let model = AppModel(store: store)
+        XCTAssertNil(model.engine.limiter.bytesPerSecond)
+        model.setSpeedLimit(3_000_000)
+        XCTAssertNil(model.engine.limiter.bytesPerSecond, "a cap set while the limit is off waits for the switch")
+        model.setLimitSpeed(true)
+        XCTAssertEqual(model.engine.limiter.bytesPerSecond, 3_000_000)
+        model.setSpeedLimit(10)
+        XCTAssertEqual(model.engine.limiter.bytesPerSecond, SpeedLimiter.minimum)
+        model.flush()
+        XCTAssertEqual(AppModel(store: store).engine.limiter.bytesPerSecond, SpeedLimiter.minimum)
+        model.setLimitSpeed(false)
+        XCTAssertNil(model.engine.limiter.bytesPerSecond)
+    }
+
     /// A DASH site that serves each track as one file goes through the segmented file engine, as Facebook's tracks do.
     func testADASHManifestOfWholeFilesBecomesAJoinedDownload() async throws {
         let site = try TestServer()
