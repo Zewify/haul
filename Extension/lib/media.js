@@ -181,7 +181,7 @@
     return labelled;
   }
 
-  // On a Facebook video page the surest grab is to let Downhaul read the page itself as Safari would: Facebook then
+  // On a Facebook video page the surest grab is to let Komizo read the page itself as Safari would: Facebook then
   // offers a progressive H.264 file, while Chrome is served VP9 or AV1 tracks a Mac may not play.
   function pageReaderItem(tabUrl) {
     let host;
@@ -189,7 +189,7 @@
     if (!(host === 'facebook.com' || host.endsWith('.facebook.com'))) return null;
     const videoId = pageVideoId(tabUrl);
     if (!videoId) return null;
-    return { kind: 'page', url: tabUrl, videoId, label: 'This video · 720p H.264 · Downhaul reads the page' };
+    return { kind: 'page', url: tabUrl, videoId, label: 'This video · 720p H.264 · Komizo reads the page' };
   }
 
   // A DASH manifest (Facebook's dash_mpd_debug.mpd?v=<id>, fetched with the user's session) for one video.
@@ -237,7 +237,7 @@
     let title;
     if (item.label) title = item.label + (item.duration && !item.shaped ? ` · ${clock(item.duration)}` : '');
     else if (item.live) title = 'Live stream · cannot be saved';
-    else if (item.error) title = `${item.kind === 'file' ? 'Video' : 'Stream'} · Downhaul cannot open this link`;
+    else if (item.error) title = `${item.kind === 'file' ? 'Video' : 'Stream'} · Komizo cannot open this link`;
     else if (item.kind === 'hls') title = 'Stream (HLS)' + (shape ? ` · ${shape}` : '');
     else if (item.kind === 'mpd') title = 'Stream (DASH)' + (shape ? ` · ${shape}` : '');
     else if (item.video === false && item.audio) title = `Audio (${format || 'mp4'})` + (shape ? ` · ${shape}` : '');
@@ -370,16 +370,16 @@
     });
   }
 
-  // A site Downhaul does not save video from, so the popup says so instead of listing pieces that would not play.
+  // A site Komizo does not save video from, so the popup says so instead of listing pieces that would not play.
   function unsupportedSite(tabUrl) {
     let host;
     try { host = new URL(tabUrl).host.toLowerCase(); } catch { return null; }
-    if (['youtube.com', 'youtu.be', 'youtube-nocookie.com'].some((h) => host === h || host.endsWith('.' + h))) return 'Downhaul does not save video from YouTube.';
+    if (['youtube.com', 'youtu.be', 'youtube-nocookie.com'].some((h) => host === h || host.endsWith('.' + h))) return 'Komizo does not save video from YouTube.';
     return null;
   }
 
   const api = { classifyResponse, describeMedia, rangeTotal, unsupportedSite, bestTitle, sameLength, markPlaying, pairTracks, labelPlaying, formatSize, normaliseMediaURL, findInPage, findDashSets, pageVideoId, parseMPD, labelDashItems, pageReaderItem,
     hlsChildren, isAdHost, tidyMedia, recordMedia };
-  root.DownhaulMedia = api;
+  root.KomizoMedia = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(globalThis);

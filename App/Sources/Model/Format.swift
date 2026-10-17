@@ -34,7 +34,7 @@ enum Format {
     static var realHome: String? { getpwuid(getuid()).flatMap { String(validatingCString: $0.pointee.pw_dir) } }
 
     /// Where the install command puts the Chrome extension, which Chrome loads unpacked (scripts/install.sh).
-    static var extensionFolder: String { (realHome ?? NSHomeDirectory()) + "/Library/Application Support/Downhaul/Extension" }
+    static var extensionFolder: String { (realHome ?? NSHomeDirectory()) + "/Library/Application Support/Komizo/Extension" }
 
     /// A folder as a person would say it: "~/Downloads". Inside the sandbox HOME is the app's container, whose
     /// Downloads is a link to the real one, so the link is resolved and the real home comes from the passwd entry.

@@ -152,10 +152,10 @@ test('dash rows say which video they are instead of a hash', () => {
 
 const { pageReaderItem } = require('./media.js');
 
-test('a Facebook video page gets an item that hands the page itself to Downhaul', () => {
+test('a Facebook video page gets an item that hands the page itself to Komizo', () => {
   assert.deepEqual(pageReaderItem('https://www.facebook.com/reel/1619008336628300'),
-    { kind: 'page', url: 'https://www.facebook.com/reel/1619008336628300', videoId: '1619008336628300', label: 'This video · 720p H.264 · Downhaul reads the page' });
-  assert.deepEqual(pageReaderItem('https://www.facebook.com/watch/?v=123'), { kind: 'page', url: 'https://www.facebook.com/watch/?v=123', videoId: '123', label: 'This video · 720p H.264 · Downhaul reads the page' });
+    { kind: 'page', url: 'https://www.facebook.com/reel/1619008336628300', videoId: '1619008336628300', label: 'This video · 720p H.264 · Komizo reads the page' });
+  assert.deepEqual(pageReaderItem('https://www.facebook.com/watch/?v=123'), { kind: 'page', url: 'https://www.facebook.com/watch/?v=123', videoId: '123', label: 'This video · 720p H.264 · Komizo reads the page' });
   assert.equal(pageReaderItem('https://www.facebook.com/'), null);
   assert.equal(pageReaderItem('https://example.com/reel/1'), null);
 });
@@ -288,19 +288,19 @@ test('silent video and its sound are paired, and the pair is what plays', () => 
   assert.deepEqual(describeMedia(playing[0]).title, 'Playing now · video + sound · 718×1276 · 0:44');
 });
 
-test('what Downhaul learned shows in the list', () => {
+test('what Komizo learned shows in the list', () => {
   assert.equal(describeMedia({ kind: 'file', url: 'https://c.com/v.mp4', contentType: 'video/mp4', video: true, audio: false, width: 1280, height: 720, duration: 65 }).title,
     'Video (mp4) · no sound · 1280×720 · 1:05');
   assert.equal(describeMedia({ kind: 'file', url: 'https://c.com/a.mp4', contentType: 'video/mp4', video: false, audio: true, duration: 3725 }).title, 'Audio (mp4) · 1:02:05');
   assert.equal(describeMedia({ kind: 'hls', url: 'https://c.com/live.m3u8', live: true }).title, 'Live stream · cannot be saved');
-  assert.equal(describeMedia({ kind: 'hls', url: 'https://c.com/once.m3u8', error: 'The server answered 403' }).title, 'Stream · Downhaul cannot open this link');
+  assert.equal(describeMedia({ kind: 'hls', url: 'https://c.com/once.m3u8', error: 'The server answered 403' }).title, 'Stream · Komizo cannot open this link');
 });
 
 const { unsupportedSite } = require('./media.js');
 
 test('YouTube is named as unsupported, everything else is not', () => {
   for (const url of ['https://www.youtube.com/watch?v=abc', 'https://m.youtube.com/shorts/x', 'https://youtu.be/abc', 'https://music.youtube.com/watch?v=1']) {
-    assert.equal(unsupportedSite(url), 'Downhaul does not save video from YouTube.', url);
+    assert.equal(unsupportedSite(url), 'Komizo does not save video from YouTube.', url);
   }
   assert.equal(unsupportedSite('https://notyoutube.com/v'), null);
   assert.equal(unsupportedSite('https://vimeo.com/1'), null);

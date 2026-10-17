@@ -22,6 +22,6 @@
   }
 
   const api = { cookieHeader, buildDownloadBody, isHTTP };
-  root.DownhaulRequest = api;
+  root.KomizoRequest = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(globalThis);

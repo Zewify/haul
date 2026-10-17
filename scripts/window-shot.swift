@@ -1,11 +1,11 @@
-// Captures every on-screen window owned by Downhaul: swift scripts/window-shot.swift <out-dir> [prefix]
+// Captures every on-screen window owned by Komizo: swift scripts/window-shot.swift <out-dir> [prefix]
 import CoreGraphics
 import Foundation
 let out = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "."
 let prefix = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : "shot"
 let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
 var index = 0
-for info in list where (info[kCGWindowOwnerName as String] as? String) == "Downhaul" && (info[kCGWindowLayer as String] as? Int ?? 0) < 25 {
+for info in list where (info[kCGWindowOwnerName as String] as? String) == "Komizo" && (info[kCGWindowLayer as String] as? Int ?? 0) < 25 {
     guard let id = info[kCGWindowNumber as String] as? Int else { continue }
     let bounds = info[kCGWindowBounds as String] as? [String: Double] ?? [:]
     guard (bounds["Width"] ?? 0) > 60 else { continue }

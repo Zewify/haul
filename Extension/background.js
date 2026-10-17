@@ -1,11 +1,11 @@
-// The Downhaul extension's background: talks to the Downhaul app on 127.0.0.1, catches downloads, serves the popup.
+// The Komizo extension's background: talks to the Komizo app on 127.0.0.1, catches downloads, serves the popup.
 // It runs as a module service worker in Chrome and Safari alike; the shared lib files attach themselves to globalThis.
 import './lib/links.js';
 import './lib/media.js';
 import './lib/request.js';
 const api = globalThis.browser ?? globalThis.chrome;
 const DEFAULTS = { port: 48512, token: null, capture: true, connected: false, media: false };
-const STATUS_ALARM = 'downhaul-status';
+const STATUS_ALARM = 'komizo-status';
 
 async function settings() {
   const stored = await api.storage.local.get(DEFAULTS);
@@ -89,21 +89,21 @@ async function pair() {
 
     return { ok: true };
   }
-  return { ok: false, error: (result.json && result.json.error) || `Downhaul answered ${result.status || 'nothing'}` };
+  return { ok: false, error: (result.json && result.json.error) || `Komizo answered ${result.status || 'nothing'}` };
 }
 
 /// Sends a URL to the app. Returns {ok, error}.
 async function handOver(url, { filename, referrer, pageTitle, kind, audioUrl, videoId } = {}) {
-  if (!DownhaulRequest.isHTTP(url)) return { ok: false, error: 'Not an http link' };
+  if (!KomizoRequest.isHTTP(url)) return { ok: false, error: 'Not an http link' };
   const s = await settings();
-  if (!s.token) return { ok: false, error: 'Not connected to Downhaul' };
+  if (!s.token) return { ok: false, error: 'Not connected to Komizo' };
   let cookies = '';
-  try { cookies = DownhaulRequest.cookieHeader(await api.cookies.getAll({ url })); } catch { /* no cookie permission */ }
-  const body = DownhaulRequest.buildDownloadBody({ url, filename, referrer, cookies, userAgent: navigator.userAgent, pageTitle, kind, audioUrl, videoId });
+  try { cookies = KomizoRequest.cookieHeader(await api.cookies.getAll({ url })); } catch { /* no cookie permission */ }
+  const body = KomizoRequest.buildDownloadBody({ url, filename, referrer, cookies, userAgent: navigator.userAgent, pageTitle, kind, audioUrl, videoId });
   const result = await post(kind ? '/media' : '/downloads', body);
   if (result.ok) return { ok: true, id: result.json && result.json.id };
   if (result.status === 401) await api.storage.local.set({ token: null });
-  return { ok: false, error: (result.json && result.json.error) || `Downhaul answered ${result.status || 'nothing'}` };
+  return { ok: false, error: (result.json && result.json.error) || `Komizo answered ${result.status || 'nothing'}` };
 }
 
 // MARK: Catching the browser's own downloads (Chromium only; Safari has no downloads API)
@@ -114,7 +114,7 @@ if (api.downloads && api.downloads.onCreated) {
     if (!s.capture || !s.token || !s.connected) return;
     if (item.byExtensionId) return;
     const url = item.finalUrl || item.url;
-    if (!DownhaulRequest.isHTTP(url)) return;
+    if (!KomizoRequest.isHTTP(url)) return;
     if (!(await fetchStatus(s.port))) { await api.storage.local.set({ connected: false }); return; }
     const filename = item.filename ? item.filename.split(/[\\/]/).pop() : undefined;
     const result = await handOver(url, { filename, referrer: item.referrer || undefined });
@@ -130,16 +130,16 @@ if (api.downloads && api.downloads.onCreated) {
 async function installMenus() {
   if (!api.contextMenus) return;
   await new Promise((resolve) => api.contextMenus.removeAll(resolve));
-  api.contextMenus.create({ id: 'downhaul-link', title: 'Download Link with Downhaul', contexts: ['link'] });
-  api.contextMenus.create({ id: 'downhaul-media', title: 'Download with Downhaul', contexts: ['image', 'video', 'audio'] });
-  api.contextMenus.create({ id: 'downhaul-page', title: 'Download This Page’s URL with Downhaul', contexts: ['page'] });
+  api.contextMenus.create({ id: 'komizo-link', title: 'Download Link with Komizo', contexts: ['link'] });
+  api.contextMenus.create({ id: 'komizo-media', title: 'Download with Komizo', contexts: ['image', 'video', 'audio'] });
+  api.contextMenus.create({ id: 'komizo-page', title: 'Download This Page’s URL with Komizo', contexts: ['page'] });
 }
 
 if (api.contextMenus) {
   api.contextMenus.onClicked.addListener(async (info, tab) => {
     const url = info.linkUrl || info.srcUrl || info.pageUrl;
     const result = await handOver(url, { referrer: info.pageUrl, pageTitle: tab && tab.title });
-    if (!result.ok) await notify('Downhaul could not take that download', result.error);
+    if (!result.ok) await notify('Komizo could not take that download', result.error);
   });
 }
 
@@ -164,15 +164,15 @@ function installMediaSniffer() {
     const headerValue = (name) => { const h = (details.responseHeaders || []).find((x) => x.name.toLowerCase() === name); return h && h.value; };
     const contentType = headerValue('content-type');
     const range = headerValue('content-range');
-    const kind = DownhaulMedia.classifyResponse(details.url, contentType, { status: details.statusCode, range });
+    const kind = KomizoMedia.classifyResponse(details.url, contentType, { status: details.statusCode, range });
     if (!kind) return;
-    const url = DownhaulMedia.normaliseMediaURL(details.url);
+    const url = KomizoMedia.normaliseMediaURL(details.url);
     const list = mediaByTab.get(details.tabId) || [];
     // The size is the file's when the response was the whole file, or when a ranged one says the total.
     const length = headerValue('content-length');
-    const size = DownhaulMedia.rangeTotal(range) || (url === details.url && !range && length ? Number(length) : undefined);
+    const size = KomizoMedia.rangeTotal(range) || (url === details.url && !range && length ? Number(length) : undefined);
     const item = { url, kind, contentType: contentType && contentType.split(';')[0], size, seen: Date.now() };
-    if (!DownhaulMedia.recordMedia(list, item)) return;
+    if (!KomizoMedia.recordMedia(list, item)) return;
     mediaByTab.set(details.tabId, list);
     if (kind === 'hls') readPlaylist(details.tabId, item);
     scheduleInspection(details.tabId);
@@ -186,7 +186,7 @@ function installMediaSniffer() {
 }
 
 function showCount(tabId) {
-  const shown = DownhaulMedia.tidyMedia(mediaByTab.get(tabId) || []).length;
+  const shown = KomizoMedia.tidyMedia(mediaByTab.get(tabId) || []).length;
   api.action.setBadgeText({ text: shown ? String(shown) : '', tabId });
 }
 
@@ -196,14 +196,14 @@ async function readPlaylist(tabId, item) {
   try {
     const response = await fetch(item.url, { credentials: 'include' });
     if (!response.ok) return;
-    item.children = DownhaulMedia.hlsChildren(await response.text(), item.url);
+    item.children = KomizoMedia.hlsChildren(await response.text(), item.url);
     if (item.children.length) showCount(tabId);
   } catch { /* the popup lists every playlist instead */ }
 }
 
 // MARK: What each item is
 
-/// What Downhaul read from each item's first bytes or playlist (length, tracks, picture size), by URL.
+/// What Komizo read from each item's first bytes or playlist (length, tracks, picture size), by URL.
 const inspected = new Map();
 /// Inspections in flight, by URL, so the popup waits for an answer already on its way instead of missing it.
 const inspecting = new Map();
@@ -216,7 +216,7 @@ function scheduleInspection(tabId) {
     inspectTimers.delete(tabId);
     try {
       const tab = await api.tabs.get(tabId);
-      await inspectItems(DownhaulMedia.tidyMedia(mediaByTab.get(tabId) || []), tab.url);
+      await inspectItems(KomizoMedia.tidyMedia(mediaByTab.get(tabId) || []), tab.url);
     } catch { /* the tab went away */ }
   }, 1500));
 }
@@ -234,7 +234,7 @@ async function askApp(fresh, referrer) {
   const asked = [];
   for (const item of fresh) {
     let cookies = '';
-    try { cookies = DownhaulRequest.cookieHeader(await api.cookies.getAll({ url: item.url })); } catch { /* no cookie permission */ }
+    try { cookies = KomizoRequest.cookieHeader(await api.cookies.getAll({ url: item.url })); } catch { /* no cookie permission */ }
     asked.push({ url: item.url, kind: item.kind, cookies });
   }
   const result = await post('/inspect', { items: asked, referrer, userAgent: navigator.userAgent });
@@ -287,25 +287,25 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         const s = await settings();
         const tabId = message.tabId;
-        let items = tabId != null ? DownhaulMedia.tidyMedia(mediaByTab.get(tabId) || []) : [];
+        let items = tabId != null ? KomizoMedia.tidyMedia(mediaByTab.get(tabId) || []) : [];
         let pageTitle = message.tabTitle;
         if (state.media && tabId != null) {
           const scanned = await pageItems(tabId, message.tabUrl);
-          const fromPage = scanned.items.filter((i) => !DownhaulMedia.isAdHost(i.url));
+          const fromPage = scanned.items.filter((i) => !KomizoMedia.isAdHost(i.url));
           const sniffedUrls = items.map((i) => i.url);
-          const dash = DownhaulMedia.labelDashItems(fromPage.filter((i) => i.kind === 'dash'), sniffedUrls, DownhaulMedia.pageVideoId(message.tabUrl || ''));
-          const reader = DownhaulMedia.pageReaderItem(message.tabUrl || '');
+          const dash = KomizoMedia.labelDashItems(fromPage.filter((i) => i.kind === 'dash'), sniffedUrls, KomizoMedia.pageVideoId(message.tabUrl || ''));
+          const reader = KomizoMedia.pageReaderItem(message.tabUrl || '');
           // Anything still unread is read now; the app answers within a few seconds with what it has.
           await inspectItems(items.concat(fromPage), message.tabUrl);
           const known = withInspection(fromPage.filter((i) => i.kind !== 'dash').concat(items));
           // Joined pairs first, then the item the visible video is playing, labelled so.
-          const ordered = DownhaulMedia.labelPlaying(DownhaulMedia.markPlaying(DownhaulMedia.pairTracks(known), scanned.playing));
-          // Live streams, and items Downhaul itself could not fetch (a one-time link the player already used), go last.
+          const ordered = KomizoMedia.labelPlaying(KomizoMedia.markPlaying(KomizoMedia.pairTracks(known), scanned.playing));
+          // Live streams, and items Komizo itself could not fetch (a one-time link the player already used), go last.
           const last = (i) => i.live || i.error;
           items = (reader ? [reader] : []).concat(dash).concat(ordered.filter((i) => !last(i))).concat(ordered.filter(last));
-          pageTitle = DownhaulMedia.bestTitle(message.tabTitle, scanned.ogTitle);
+          pageTitle = KomizoMedia.bestTitle(message.tabTitle, scanned.ogTitle);
         }
-        const unsupported = DownhaulMedia.unsupportedSite(message.tabUrl || '');
+        const unsupported = KomizoMedia.unsupportedSite(message.tabUrl || '');
         if (unsupported) items = [];
         return { ...state, capture: s.capture, port: s.port, media: state.media, items, pageTitle, unsupported };
       }
@@ -332,4 +332,4 @@ if (api.alarms) {
   api.alarms.onAlarm.addListener((alarm) => { if (alarm.name === STATUS_ALARM) refreshStatus(); });
 }
 refreshStatus();
-globalThis.downhaul = { fetchStatus, pair, handOver, refreshStatus, settings };
+globalThis.komizo = { fetchStatus, pair, handOver, refreshStatus, settings };

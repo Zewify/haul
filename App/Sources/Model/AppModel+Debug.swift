@@ -1,9 +1,9 @@
 import Foundation
-import DownhaulCore
+import KomizoCore
 
 #if DEBUG
 extension AppModel {
-    /// Puts a fake catch in the panel for UI checks: `-DownhaulShow catch`.
+    /// Puts a fake catch in the panel for UI checks: `-KomizoShow catch`.
     func debugInjectCatch() {
         let incoming = IncomingDownload(url: "https://example.com/files/Example%20Archive.zip", filename: "Example Archive.zip", referrer: "https://example.com/")
         var pending = PendingCatch(incoming: incoming, media: false, name: "Example Archive.zip", folder: folder)

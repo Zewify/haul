@@ -1,8 +1,8 @@
 // End-to-end check of the media grabber against a real page: launches a throwaway Chrome with the extension, pairs
-// it, opens the page, starts playback, prints what the sniffer found, grabs the best item, presses Start in Downhaul's
-// catch panel, and follows the new download in Downhaul's own library until it finishes, failing on a silent result.
-//   DOWNHAUL_CHROME=<chrome-for-testing-binary> node scripts/e2e-media.mjs <page-url> [seconds-to-watch]
-// Needs a running Downhaul.
+// it, opens the page, starts playback, prints what the sniffer found, grabs the best item, presses Start in Komizo's
+// catch panel, and follows the new download in Komizo's own library until it finishes, failing on a silent result.
+//   KOMIZO_CHROME=<chrome-for-testing-binary> node scripts/e2e-media.mjs <page-url> [seconds-to-watch]
+// Needs a running Komizo.
 import { spawn, execFile } from 'node:child_process';
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
@@ -13,16 +13,16 @@ const [pageURL, watchArg] = process.argv.slice(2);
 if (!pageURL) { console.error('usage: e2e-media.mjs <page-url> [seconds]'); process.exit(2); }
 const watchSeconds = Number(watchArg || 12);
 const port = 9333;
-const profile = mkdtempSync(join(tmpdir(), 'downhaul-chrome-'));
+const profile = mkdtempSync(join(tmpdir(), 'komizo-chrome-'));
 const extension = new URL('../Extension', import.meta.url).pathname;
-const binary = process.env.DOWNHAUL_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const binary = process.env.KOMIZO_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const chrome = spawn(binary, [`--user-data-dir=${profile}`, `--load-extension=${extension}`, `--remote-debugging-port=${port}`,
   '--no-first-run', '--no-default-browser-check', '--autoplay-policy=no-user-gesture-required', 'about:blank'], { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const osa = (script) => new Promise((resolve) => execFile('osascript', ['-e', script], (e, out) => resolve(e ? null : out.trim())));
-const libraryPath = join(homedir(), 'Library/Containers/com.zewify.downhaul/Data/Library/Application Support/Downhaul/library.json');
+const libraryPath = join(homedir(), 'Library/Containers/com.zewify.komizo/Data/Library/Application Support/Komizo/library.json');
 const library = () => { try { return JSON.parse(readFileSync(libraryPath, 'utf8')).downloads || []; } catch { return []; } };
-const allowScript = 'tell application "System Events" to tell process "Downhaul"\nset clicked to false\nrepeat with w in windows\nif exists button "Allow" of w then\nclick button "Allow" of w\nset clicked to true\nend if\nend repeat\nif not clicked then error "no alert"\nend tell';
+const allowScript = 'tell application "System Events" to tell process "Komizo"\nset clicked to false\nrepeat with w in windows\nif exists button "Allow" of w then\nclick button "Allow" of w\nset clicked to true\nend if\nend repeat\nif not clicked then error "no alert"\nend tell';
 
 async function targets() { try { return await (await fetch(`http://127.0.0.1:${port}/json`)).json(); } catch { return []; } }
 async function waitFor(predicate, label, tries = 60) {
@@ -43,9 +43,9 @@ try {
   const session = connect(first); await session.ready;
   await session.send('Page.navigate', { url: 'chrome://extensions/' });
   await sleep(1500);
-  const info = await session.send('Runtime.evaluate', { expression: `new Promise(res => chrome.developerPrivate.getExtensionsInfo({includeDisabled: true}, res)).then(list => JSON.stringify(list.filter(e => e.name === 'Downhaul').map(e => e.id)))`, awaitPromise: true, returnByValue: true });
+  const info = await session.send('Runtime.evaluate', { expression: `new Promise(res => chrome.developerPrivate.getExtensionsInfo({includeDisabled: true}, res)).then(list => JSON.stringify(list.filter(e => e.name === 'Komizo').map(e => e.id)))`, awaitPromise: true, returnByValue: true });
   const [id] = JSON.parse(info.result.result.value);
-  if (!id) throw new Error('the Downhaul extension did not load');
+  if (!id) throw new Error('the Komizo extension did not load');
   await session.send('Page.navigate', { url: `chrome-extension://${id}/popup.html` });
   await sleep(1200);
   const ask = async (message) => {
@@ -54,8 +54,8 @@ try {
     return JSON.parse(r.result.result.value);
   };
   const status = await ask({ type: 'status' });
-  if (!status.connected) throw new Error('Downhaul is not answering on 48512');
-  if (!status.media) throw new Error('this Downhaul reports no media grabber');
+  if (!status.connected) throw new Error('Komizo is not answering on 48512');
+  if (!status.media) throw new Error('this Komizo reports no media grabber');
   const approver = (async () => { for (let i = 0; i < 24; i++) { await sleep(500); if (await osa(allowScript) !== null) return true; } return false; })();
   const paired = await ask({ type: 'pair' });
   console.log('pair', JSON.stringify(paired), 'approver clicked:', await approver);
@@ -84,8 +84,8 @@ try {
   const known = (i) => [i.duration ? `${Math.round(i.duration)}s` : '', i.width ? `${i.width}x${i.height}` : '', i.video === undefined ? '' : `video:${i.video}`, i.audio === undefined ? '' : `sound:${i.audio}`, i.live ? 'LIVE' : '', i.error ? `UNOPENABLE (${i.error})` : ''].filter(Boolean).join(' ');
   for (const item of state.items) console.log(`  ${item.playing ? '▶' : ' '} ${item.kind}  ${item.label || item.contentType || '-'}  ${known(item)}  ${item.url.slice(0, 90)}`);
   console.log('page title:', state.pageTitle);
-  // What a person would press: the video they are watching, when Downhaul can tell; else the best of the rest.
-  // Items the popup shows as live or as a link Downhaul cannot open are not ones a person would press.
+  // What a person would press: the video they are watching, when Komizo can tell; else the best of the rest.
+  // Items the popup shows as live or as a link Komizo cannot open are not ones a person would press.
   const usable = state.items.filter((i) => !i.live && !i.error);
   const pick = usable.find((i) => i.playing) || usable.find((i) => i.kind === 'page') || usable.find((i) => i.kind === 'dash' && /^This video/.test(i.label || '')) || usable.find((i) => i.kind === 'dash')
     || usable.find((i) => i.kind === 'hls' || i.kind === 'mpd') || usable.filter((i) => i.kind === 'file').sort((a, b) => (b.size || 0) - (a.size || 0))[0];
@@ -102,12 +102,12 @@ try {
     download = library().find((d) => !before.has(d.id));
     const state = download && Object.keys(download.state)[0];
     if (state === 'finished') {
-      // Downhaul inspects a finished grab and notes a silent one a moment later.
+      // Komizo inspects a finished grab and notes a silent one a moment later.
       await sleep(3000);
       download = library().find((d) => d.id === download.id);
       break;
     }
-    if (state === 'failed' || state === 'cancelled') throw new Error(`Downhaul ${state} it: ${JSON.stringify(download.state)}`);
+    if (state === 'failed' || state === 'cancelled') throw new Error(`Komizo ${state} it: ${JSON.stringify(download.state)}`);
   }
   if (!download || !download.state.finished) throw new Error('the download did not finish within 10 minutes');
   console.log('landed', download.finalPath, `(${download.size} bytes)`, download.mediaNote ? `· ${download.mediaNote}` : '');

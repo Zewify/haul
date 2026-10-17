@@ -1,11 +1,11 @@
-# Downhaul — launch checklist
+# Komizo — launch checklist
 
-What is left before Downhaul can ship. Tick items here rather than tracking them elsewhere.
+What is left before Komizo can ship. Tick items here rather than tracking them elsewhere.
 
 ## Decided
 
 - [x] Free, one build, published from zewify.com the way PortGlimpse is (owner, 2026-10-14): ad hoc signed, installed with a curl command, source available on GitHub. No Pro, no App Store.
-- [x] The name (2026-10-17): Downhaul, chosen by the owner after a desk search found another free Mac download manager called Haul (github.com/sibiraj-s/haul, from 2026-10-01) and no app or project called Downhaul, and Zewify/downhaul free. No lawyer's clearance search (owner, 2026-10-17): Downhaul is free and not promoted, so the realistic worst case is being asked to rename, which the 0.3.0 rename showed takes an afternoon. Revisit if it is ever sold or promoted.
+- [x] The name (2026-10-17): Komizo (Greek κομίζω, "I carry, I bring home"), the owner's pick. Haul until 0.2.1 (another free Mac download manager, github.com/sibiraj-s/haul, had the name from 2026-10-01), Downhaul in 0.3.0. A desk search found no app or project called Komizo; Komiko, a sales tool, is close, which the owner accepted. No lawyer's clearance search, by choice: free and not promoted, so the worst case is being asked to rename.
 - [ ] Whether "ask before starting" stays on by default.
 
 ## Distribution
@@ -14,7 +14,7 @@ What is left before Downhaul can ship. Tick items here rather than tracking them
 
 ## Extensions
 
-- [x] No Chrome Web Store (owner, 2026-10-17): the extension is loaded unpacked. From 0.2.1 the release carries it and the install command puts it in `~/Library/Application Support/Downhaul/Extension`, replaced in place by each update; Settings → Browser copies the path.
+- [x] No Chrome Web Store (owner, 2026-10-17): the extension is loaded unpacked. From 0.2.1 the release carries it and the install command puts it in `~/Library/Application Support/Komizo/Extension`, replaced in place by each update; Settings → Browser copies the path.
 - [ ] Safari: test the packaged extension (it ships inside the app, ad hoc signed); confirm the content-script capture, the context menus and the video popup.
 - [ ] Firefox, if asked for.
 
@@ -33,7 +33,7 @@ What is left before Downhaul can ship. Tick items here rather than tracking them
 - [ ] Grabber: signed-in pages (Instagram, Facebook and X feeds) are untested.
 - [ ] Grabber: the catch panel for media should show which item is which (HD with audio, SD, stream) and let the user pick; today the popup shows the list and the panel shows one.
 - [ ] Grabber: Facebook names. The page title is "Facebook" when signed in, so files are "Facebook <video id>.mp4"; the caption is only in the crawler-served page. Decide whether to fetch the caption (one more page load as a crawler) or let the user rename in the panel.
-- [x] Grabber: YouTube is out of scope. Its streams are DASH with signed, throttled, frequently re-encrypted URLs that need a maintained extractor (yt-dlp carries thousands of lines for it). The popup says "Downhaul does not save video from YouTube." instead of listing pieces that would not play (2026-10-17).
+- [x] Grabber: YouTube is out of scope. Its streams are DASH with signed, throttled, frequently re-encrypted URLs that need a maintained extractor (yt-dlp carries thousands of lines for it). The popup says "Komizo does not save video from YouTube." instead of listing pieces that would not play (2026-10-17).
 - [ ] Notifications when a download finishes.
-- [x] Website pages in the `zewify` repo (`/downhaul/`), with screenshots from `scripts/window-shot.swift`; the tested-sites list there and in the app's "?" popover change together.
+- [x] Website pages in the `zewify` repo (`/komizo/`), with screenshots from `scripts/window-shot.swift`; the tested-sites list there and in the app's "?" popover change together.
 - [ ] The menu bar icon's progress bar: check it against light and dark menu bars at 2560 wide.

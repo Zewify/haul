@@ -1,13 +1,13 @@
-import DownhaulCore
+import KomizoCore
 import XCTest
-@testable import Downhaul
+@testable import Komizo
 
 @MainActor
 final class UpdateCheckerTests: XCTestCase {
     nonisolated(unsafe) var defaults: UserDefaults!
 
     override func setUpWithError() throws {
-        defaults = UserDefaults(suiteName: "downhaul-updates-\(UUID().uuidString)")
+        defaults = UserDefaults(suiteName: "komizo-updates-\(UUID().uuidString)")
     }
 
     static func feed(_ tag: String, status: Int = 200) -> @Sendable (URLRequest) async throws -> (Data, URLResponse) {

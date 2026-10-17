@@ -1,4 +1,4 @@
-import DownhaulCore
+import KomizoCore
 import SwiftUI
 import UniformTypeIdentifiers
 

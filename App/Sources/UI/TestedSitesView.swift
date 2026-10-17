@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// Which sites Downhaul's grabber has been checked on, opened from the main window's toolbar.
+/// Which sites Komizo's grabber has been checked on, opened from the main window's toolbar.
 struct TestedSitesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Video from websites").font(.headline)
-                Text("Play the video, then click the Downhaul icon in your browser. The one you are watching is listed first, as Playing now.")
+                Text("Play the video, then click the Komizo icon in your browser. The one you are watching is listed first, as Playing now.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -15,7 +15,7 @@ struct TestedSitesView: View {
                 .font(.callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             group("Cannot be saved", systemImage: "xmark.circle.fill", tint: .secondary, sites: TestedSites.doesNotWork)
-            Text("Tested on \(TestedSites.testedOn), with public videos, signed out. Sites change their players, so one may stop working before Downhaul catches up.")
+            Text("Tested on \(TestedSites.testedOn), with public videos, signed out. Sites change their players, so one may stop working before Komizo catches up.")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

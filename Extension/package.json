@@ -1,6 +1,6 @@
 {
-  "name": "downhaul-extension",
+  "name": "komizo-extension",
   "private": true,
-  "description": "The Downhaul browser extension: hands downloads to the Downhaul app.",
+  "description": "The Komizo browser extension: hands downloads to the Komizo app.",
   "scripts": { "test": "node --test lib/*.test.js" }
 }

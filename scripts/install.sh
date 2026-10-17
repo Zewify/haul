@@ -1,28 +1,28 @@
 #!/bin/sh
-# Installs or updates Downhaul from its latest GitHub release.
-#   curl -fsSL https://zewify.com/downhaul/install.sh | sh
+# Installs or updates Komizo from its latest GitHub release.
+#   curl -fsSL https://zewify.com/komizo/install.sh | sh
 # Run it again to update. It never uses sudo, and it only replaces the installed app
 # once the new one has been downloaded and its SHA-256 checked.
 set -eu
 
-API="${DOWNHAUL_API:-https://api.github.com/repos/zewify/downhaul/releases/latest}"
-APP="Downhaul.app"
+API="${KOMIZO_API:-https://api.github.com/repos/zewify/komizo/releases/latest}"
+APP="Komizo.app"
 # Where the Chrome extension lives. Chrome loads it unpacked from here, so it stays at this path and each update
 # replaces it in place; a reload in chrome://extensions then picks up the new version.
-EXTENSION_DIR="${DOWNHAUL_EXTENSION_DIR:-$HOME/Library/Application Support/Downhaul/Extension}"
-BUNDLE_ID="com.zewify.downhaul"
+EXTENSION_DIR="${KOMIZO_EXTENSION_DIR:-$HOME/Library/Application Support/Komizo/Extension}"
+BUNDLE_ID="com.zewify.komizo"
 
-say() { printf 'Downhaul: %s\n' "$1"; }
-fail() { printf 'Downhaul: %s\n' "$1" >&2; exit 1; }
+say() { printf 'Komizo: %s\n' "$1"; }
+fail() { printf 'Komizo: %s\n' "$1" >&2; exit 1; }
 
-# This user's running Downhaul, if any. Tests replace these three after sourcing the file.
-is_running() { pgrep -xu "$(id -u)" Downhaul >/dev/null 2>&1; }
+# This user's running Komizo, if any. Tests replace these three after sourcing the file.
+is_running() { pgrep -xu "$(id -u)" Komizo >/dev/null 2>&1; }
 quit_app() { osascript -e "quit app id \"$BUNDLE_ID\"" >/dev/null 2>&1 || true; }
 launch_app() { open "$1"; }
 
 # The folder the running copy was opened from, or nothing.
 running_app_dir() {
-  ps -xo comm= -u "$(id -u)" 2>/dev/null | sed -n 's|^\(.*\)/Downhaul\.app/Contents/MacOS/Downhaul$|\1|p' | head -n 1
+  ps -xo comm= -u "$(id -u)" 2>/dev/null | sed -n 's|^\(.*\)/Komizo\.app/Contents/MacOS/Komizo$|\1|p' | head -n 1
 }
 
 # Where to install. An update goes where the app already is: the running copy's folder when it is
@@ -30,8 +30,8 @@ running_app_dir() {
 # /Applications or ~/Applications. A first install goes to /Applications when this user can write
 # to it (admin accounts can, without sudo), otherwise ~/Applications.
 install_dir() {
-  if [ -n "${DOWNHAUL_INSTALL_DIR:-}" ]; then echo "$DOWNHAUL_INSTALL_DIR"; return; fi
-  system="${DOWNHAUL_APPLICATIONS:-/Applications}"
+  if [ -n "${KOMIZO_INSTALL_DIR:-}" ]; then echo "$KOMIZO_INSTALL_DIR"; return; fi
+  system="${KOMIZO_APPLICATIONS:-/Applications}"
   running=$(running_app_dir)
   case "$running" in
     "$system" | "$system"/* | "$HOME/Applications" | "$HOME/Applications"/*) echo "$running"; return ;;
@@ -66,7 +66,7 @@ fetch_release() {
 main() {
   [ "$(uname -s)" = "Darwin" ] || fail "this installer is for macOS."
   major=$(sw_vers -productVersion | cut -d. -f1)
-  [ "$major" -ge 15 ] || fail "Downhaul needs macOS 15 or later."
+  [ "$major" -ge 15 ] || fail "Komizo needs macOS 15 or later."
 
   tmp=$(mktemp -d)
   # Clean up on every exit, and make Ctrl-C or a kill actually stop the script.
@@ -76,8 +76,8 @@ main() {
 
   say "finding the latest release"
   fetch_release "$tmp/release.json"
-  zip_url=$(grep -o '"browser_download_url": *"[^"]*/Downhaul-[^"/]*\.zip"' "$tmp/release.json" | head -n 1 | sed 's/.*"\([^"]*\)"$/\1/')
-  sum_url=$(grep -o '"browser_download_url": *"[^"]*/Downhaul-[^"/]*\.zip\.sha256"' "$tmp/release.json" | head -n 1 | sed 's/.*"\([^"]*\)"$/\1/')
+  zip_url=$(grep -o '"browser_download_url": *"[^"]*/Komizo-[^"/]*\.zip"' "$tmp/release.json" | head -n 1 | sed 's/.*"\([^"]*\)"$/\1/')
+  sum_url=$(grep -o '"browser_download_url": *"[^"]*/Komizo-[^"/]*\.zip\.sha256"' "$tmp/release.json" | head -n 1 | sed 's/.*"\([^"]*\)"$/\1/')
   version=$(grep -o '"tag_name": *"[^"]*"' "$tmp/release.json" | head -n 1 | sed 's/.*"v\{0,1\}\([^"]*\)"$/\1/')
   [ -n "$zip_url" ] && [ -n "$sum_url" ] || fail "the latest release has no download yet. Try again in a few minutes."
 
@@ -85,12 +85,12 @@ main() {
   installed=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$dest/$APP/Contents/Info.plist" 2>/dev/null || true)
   if [ -n "$version" ] && [ "$installed" = "$version" ]; then
     say "$version is already installed in $dest, so there is nothing to update."
-    retire_haul
-    if [ "${DOWNHAUL_NO_LAUNCH:-}" != "1" ] && ! is_running; then launch_app "$dest/$APP"; fi
+    retire_old_names
+    if [ "${KOMIZO_NO_LAUNCH:-}" != "1" ] && ! is_running; then launch_app "$dest/$APP"; fi
     return 0
   fi
 
-  say "downloading Downhaul $version"
+  say "downloading Komizo $version"
   curl -fsSL "$zip_url" -o "$tmp/app.zip" || fail "the download failed. Try again."
   curl -fsSL "$sum_url" -o "$tmp/app.zip.sha256" || fail "the checksum download failed. Try again."
   expected=$(cut -d' ' -f1 "$tmp/app.zip.sha256")
@@ -101,11 +101,11 @@ main() {
   [ -d "$tmp/unpacked/$APP" ] || fail "the download does not contain $APP."
 
   mkdir -p "$dest"
-  if [ "${DOWNHAUL_NO_LAUNCH:-}" != "1" ] && is_running; then
-    say "quitting Downhaul to update it"
+  if [ "${KOMIZO_NO_LAUNCH:-}" != "1" ] && is_running; then
+    say "quitting Komizo to update it"
     quit_app
     for _ in 1 2 3 4 5 6 7 8 9 10; do is_running || break; sleep 0.5; done
-    ! is_running || fail "Downhaul didn't quit. Quit it from its panel, then run this again."
+    ! is_running || fail "Komizo didn't quit. Quit it from its panel, then run this again."
   fi
   # Copy the new app in beside the old one, move the old one aside, then move the new one into place.
   # Each step is a rename within one folder, and a failure puts the old copy back, so there is always an app.
@@ -126,8 +126,8 @@ main() {
 
   say "installed $version in $dest"
   install_extension "$tmp/unpacked/Extension"
-  retire_haul
-  if [ "${DOWNHAUL_NO_LAUNCH:-}" != "1" ]; then
+  retire_old_names
+  if [ "${KOMIZO_NO_LAUNCH:-}" != "1" ]; then
     launch_app "$dest/$APP"
     say "it opens in a window and stays in your menu bar. Run the same command again to update."
   fi
@@ -148,40 +148,44 @@ install_extension() {
   if ! mv "$enew" "$EXTENSION_DIR"; then [ -e "$eold" ] && mv "$eold" "$EXTENSION_DIR"; say "couldn't replace the Chrome extension in $parent."; return 0; fi
   rm -rf "$eold" 2>/dev/null || true
   if [ "$had" = 1 ]; then
-    say "updated the Chrome extension; press the reload arrow on Downhaul's card in chrome://extensions to use it."
+    say "updated the Chrome extension; press the reload arrow on Komizo's card in chrome://extensions to use it."
   else
     say "the Chrome extension is in: $EXTENSION_DIR"
     say "to add it, open chrome://extensions, turn on Developer mode, click Load unpacked, press Command-Shift-G, paste that path and choose the folder."
   fi
 }
 
-# The app was called Haul until 0.2.1 (bundle com.zewify.haul). Its copy is quit and removed, and so is its Chrome
-# extension folder; Chrome then shows that extension as missing, and the new one has to be added in its place.
-OLD_APP_DIRS="${DOWNHAUL_OLD_APP_DIRS:-${DOWNHAUL_APPLICATIONS:-/Applications} $HOME/Applications}"
-OLD_EXTENSION_DIR="${DOWNHAUL_OLD_EXTENSION_DIR:-$HOME/Library/Application Support/Haul/Extension}"
-haul_running() { pgrep -xu "$(id -u)" Haul >/dev/null 2>&1; }
-quit_haul() { osascript -e 'quit app id "com.zewify.haul"' >/dev/null 2>&1 || true; }
-retire_haul() {
+# The app was called Haul until 0.2.1 (com.zewify.haul) and Downhaul in 0.3.0 (com.zewify.downhaul). A copy under an
+# old name is quit and removed, and so is its Chrome extension folder; Chrome then shows that extension as missing,
+# and Komizo's has to be added in its place.
+OLD_APP_DIRS="${KOMIZO_OLD_APP_DIRS:-${KOMIZO_APPLICATIONS:-/Applications} $HOME/Applications}"
+OLD_SUPPORT_DIR="${KOMIZO_OLD_SUPPORT_DIR:-$HOME/Library/Application Support}"
+retire_old_names() {
+  retire_old Haul com.zewify.haul
+  retire_old Downhaul com.zewify.downhaul
+}
+retire_old() { # name bundle-id
+  name=$1; bundle=$2; extension="$OLD_SUPPORT_DIR/$name/Extension"
   found=0
-  for dir in $OLD_APP_DIRS; do [ -d "$dir/Haul.app" ] && found=1; done
-  [ -d "$OLD_EXTENSION_DIR" ] && found=1
+  for dir in $OLD_APP_DIRS; do [ -d "$dir/$name.app" ] && found=1; done
+  [ -d "$extension" ] && found=1
   [ "$found" = 1 ] || return 0
-  if [ "${DOWNHAUL_NO_LAUNCH:-}" != "1" ] && haul_running; then
-    quit_haul
-    for _ in 1 2 3 4 5 6 7 8 9 10; do haul_running || break; sleep 0.5; done
+  if [ "${KOMIZO_NO_LAUNCH:-}" != "1" ] && pgrep -xu "$(id -u)" "$name" >/dev/null 2>&1; then
+    osascript -e "quit app id \"$bundle\"" >/dev/null 2>&1 || true
+    for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -xu "$(id -u)" "$name" >/dev/null 2>&1 || break; sleep 0.5; done
   fi
   for dir in $OLD_APP_DIRS; do
-    if [ -d "$dir/Haul.app" ]; then
-      rm -rf "$dir/Haul.app" 2>/dev/null && say "removed Haul.app from $dir: Haul is now called Downhaul." || say "couldn't remove the old $dir/Haul.app; delete it when you like."
+    if [ -d "$dir/$name.app" ]; then
+      rm -rf "$dir/$name.app" 2>/dev/null && say "removed $name.app from $dir: $name is now called Komizo." || say "couldn't remove the old $dir/$name.app; delete it when you like."
     fi
   done
-  if [ -d "$OLD_EXTENSION_DIR" ]; then
-    rm -rf "$OLD_EXTENSION_DIR" 2>/dev/null
-    rmdir "$(dirname "$OLD_EXTENSION_DIR")" 2>/dev/null || true
-    say "in chrome://extensions, remove the old Haul extension and add Downhaul's folder (above) the same way."
+  if [ -d "$extension" ]; then
+    rm -rf "$extension" 2>/dev/null
+    rmdir "$OLD_SUPPORT_DIR/$name" 2>/dev/null || true
+    say "in chrome://extensions, remove the old $name extension and add Komizo's folder (above) the same way."
   fi
 }
 
-# Tests source this file (DOWNHAUL_SOURCE_ONLY=1) to call its functions, so main does not run.
-if [ "${DOWNHAUL_SOURCE_ONLY:-}" = "1" ]; then return 0; fi
+# Tests source this file (KOMIZO_SOURCE_ONLY=1) to call its functions, so main does not run.
+if [ "${KOMIZO_SOURCE_ONLY:-}" = "1" ]; then return 0; fi
 main "$@"

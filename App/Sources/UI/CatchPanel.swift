@@ -1,4 +1,4 @@
-import DownhaulCore
+import KomizoCore
 import SwiftUI
 
 /// A download the browser handed over, waiting for the user: name, folder, Start.

@@ -23,6 +23,6 @@
   }
 
   const api = { isFileLink, FILE_EXTENSIONS };
-  root.DownhaulLinks = api;
+  root.KomizoLinks = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(globalThis);

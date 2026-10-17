@@ -2,7 +2,7 @@
 //   swift scripts/make-icon.swift App/Resources/Assets.xcassets/AppIcon.appiconset Extension/icons
 //
 // The Zewify dark tile with a download arrow whose shaft is drawn as four stacked segments: the segment map
-// that is the signature of a segmented downloader, in Downhaul's blue.
+// that is the signature of a segmented downloader, in Komizo's blue.
 import AppKit
 
 let args = CommandLine.arguments

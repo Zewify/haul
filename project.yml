@@ -1,4 +1,4 @@
-name: Downhaul
+name: Komizo
 options:
   bundleIdPrefix: com.zewify
   deploymentTarget:
@@ -6,13 +6,13 @@ options:
   createIntermediateGroups: true
   developmentLanguage: en
 packages:
-  DownhaulCore:
+  KomizoCore:
     path: Core
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    MARKETING_VERSION: "0.3.0"
-    CURRENT_PROJECT_VERSION: "4"
+    MARKETING_VERSION: "0.4.0"
+    CURRENT_PROJECT_VERSION: "5"
     MACOSX_DEPLOYMENT_TARGET: "15.0"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     DEAD_CODE_STRIPPING: YES
@@ -22,7 +22,7 @@ settings:
       ARCHS: "arm64 x86_64"
       ONLY_ACTIVE_ARCH: NO
 targets:
-  Downhaul:
+  Komizo:
     type: application
     platform: macOS
     configFiles:
@@ -32,13 +32,13 @@ targets:
       - path: App/Sources
       - path: App/Resources/Assets.xcassets
     dependencies:
-      - package: DownhaulCore
-      - target: DownhaulSafari
+      - package: KomizoCore
+      - target: KomizoSafari
     info:
       path: App/Info.plist
       properties:
-        CFBundleName: Downhaul
-        CFBundleDisplayName: Downhaul
+        CFBundleName: Komizo
+        CFBundleDisplayName: Komizo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.utilities
@@ -48,7 +48,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
     entitlements:
-      path: App/Downhaul.entitlements
+      path: App/Komizo.entitlements
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
@@ -58,15 +58,15 @@ targets:
         com.apple.security.files.bookmarks.app-scope: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.zewify.downhaul
-        PRODUCT_NAME: Downhaul
+        PRODUCT_BUNDLE_IDENTIFIER: com.zewify.komizo
+        PRODUCT_NAME: Komizo
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_HARDENED_RUNTIME: YES
         GENERATE_INFOPLIST_FILE: NO
 
   # The Safari Web Extension: the shared extension files, packaged inside the app.
-  DownhaulSafari:
+  KomizoSafari:
     type: app-extension
     platform: macOS
     configFiles:
@@ -110,8 +110,8 @@ targets:
     info:
       path: SafariExtension/Info.plist
       properties:
-        CFBundleName: Downhaul
-        CFBundleDisplayName: Downhaul
+        CFBundleName: Komizo
+        CFBundleDisplayName: Komizo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSHumanReadableCopyright: © 2026 Zewify
@@ -119,19 +119,19 @@ targets:
           NSExtensionPointIdentifier: com.apple.Safari.web-extension
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SafariWebExtensionHandler
     entitlements:
-      path: SafariExtension/DownhaulSafari.entitlements
+      path: SafariExtension/KomizoSafari.entitlements
       properties:
         com.apple.security.app-sandbox: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.zewify.downhaul.safari
-        PRODUCT_NAME: DownhaulSafari
+        PRODUCT_BUNDLE_IDENTIFIER: com.zewify.komizo.safari
+        PRODUCT_NAME: KomizoSafari
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         ENABLE_HARDENED_RUNTIME: YES
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
 
-  DownhaulTests:
+  KomizoTests:
     type: bundle.unit-test
     platform: macOS
     configFiles:
@@ -140,27 +140,27 @@ targets:
     sources:
       - path: AppTests
       # The core's loopback test server, so app tests can serve real playlists and files.
-      - path: Core/Tests/DownhaulCoreTests/TestServer.swift
+      - path: Core/Tests/KomizoCoreTests/TestServer.swift
     dependencies:
-      - target: Downhaul
+      - target: Komizo
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.zewify.downhaul.tests
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Downhaul.app/Contents/MacOS/Downhaul
+        PRODUCT_BUNDLE_IDENTIFIER: com.zewify.komizo.tests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Komizo.app/Contents/MacOS/Komizo
         BUNDLE_LOADER: $(TEST_HOST)
         GENERATE_INFOPLIST_FILE: YES
 
 schemes:
-  Downhaul:
+  Komizo:
     build:
       targets:
-        Downhaul: all
-        DownhaulTests: [test]
+        Komizo: all
+        KomizoTests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
-        - DownhaulTests
+        - KomizoTests
     archive:
       config: Release

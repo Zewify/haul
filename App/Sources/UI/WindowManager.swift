@@ -13,7 +13,7 @@ final class WindowManager {
     /// SwiftUI Settings scene on current macOS, which left the menu's Settings… item dead.
     @ObservationIgnored var openSettings: OpenSettingsAction?
 
-    static let mainFrame = "DownhaulMain"
+    static let mainFrame = "KomizoMain"
 
     init(model: AppModel) { self.model = model }
 
@@ -30,7 +30,7 @@ final class WindowManager {
         let host = NSHostingController(rootView: MainWindow().environment(model).environment(self))
         host.sizingOptions = [.minSize]
         let window = NSWindow(contentViewController: host)
-        window.title = "Downhaul"
+        window.title = "Komizo"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
         window.setContentSize(NSSize(width: 760, height: 480))
@@ -54,11 +54,11 @@ final class WindowManager {
             panel.isReleasedWhenClosed = false
             panel.becomesKeyOnlyIfNeeded = false
             panel.hidesOnDeactivate = false
-            panel.setFrameAutosaveName("DownhaulCatch")
+            panel.setFrameAutosaveName("KomizoCatch")
             catchPanel = panel
         }
         guard let panel = catchPanel else { return }
-        if !panel.isVisible, !panel.setFrameUsingName("DownhaulCatch") {
+        if !panel.isVisible, !panel.setFrameUsingName("KomizoCatch") {
             // Top right of the main screen, where a browser's own download shelf would appear.
             if let screen = NSScreen.main {
                 let frame = screen.visibleFrame
